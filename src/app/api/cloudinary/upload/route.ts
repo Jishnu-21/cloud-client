@@ -61,7 +61,9 @@ export async function POST(req: Request) {
       const uploadStream = cloudinary.uploader.upload_stream(
         {
           folder: uploadPath,
-          resource_type: 'auto'
+          resource_type: 'auto',
+          use_filename: true,
+          unique_filename: true
         },
         (error, result) => {
           if (error) reject(error);
@@ -76,7 +78,8 @@ export async function POST(req: Request) {
       publicId: result.public_id,
       url: result.secure_url,
       resource_type: result.resource_type,
-      format: result.format
+      format: result.format,
+      original_filename: file.name
     });
   } catch (error) {
     console.error('Error uploading file:', error);

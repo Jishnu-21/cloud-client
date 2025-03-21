@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'react-toastify';
 import axios from 'axios';
@@ -19,6 +19,7 @@ interface CloudinaryFile {
   resource_type: string;
   format: string;
   created_at: string;
+  original_filename?: string;
 }
 
 interface Folder {
@@ -35,6 +36,7 @@ export default function Dashboard() {
   const [isCreatingFolder, setIsCreatingFolder] = useState(false);
   const [isDeletingFolder, setIsDeletingFolder] = useState(false);
   const [selectedFolder, setSelectedFolder] = useState<Folder | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleTokenError = () => {
     localStorage.removeItem('token');
@@ -101,15 +103,15 @@ export default function Dashboard() {
           Authorization: `Bearer ${token}`
         }
       });
-  
+
       // Create a proper file object with the information we have
-      const fileName = file.name;
       const newFile = {
         public_id: response.data.publicId,
         secure_url: response.data.url,
         resource_type: response.data.resource_type || 'image',
-        format: response.data.format || fileName.split('.').pop() || '',
-        created_at: new Date().toISOString()
+        format: response.data.format || file.name.split('.').pop() || '',
+        created_at: new Date().toISOString(),
+        original_filename: response.data.original_filename || file.name
       };
   
       // Update files state with the new file
@@ -122,6 +124,11 @@ export default function Dashboard() {
         isLoading: false,
         autoClose: 3000
       });
+
+      // Reset the file input
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
     } catch (error: any) {
       if (error.response?.status === 401) {
         handleTokenError();
@@ -130,6 +137,11 @@ export default function Dashboard() {
       const errorMessage = error.response?.data?.message || error.response?.data?.error || error.message;
       toast.error('Failed to upload file: ' + errorMessage);
       console.error('Error uploading file:', error);
+      
+      // Also reset the file input on error
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
     }
   };
   
@@ -330,6 +342,7 @@ export default function Dashboard() {
               <input
                 type="file"
                 onChange={handleFileUpload}
+                ref={fileInputRef}
                 className="hidden"
               />
             </label>
@@ -395,13 +408,13 @@ export default function Dashboard() {
                   className="relative group p-4 rounded-lg bg-vercel-card hover:bg-vercel-card-hover transition-colors"
                 >
                   <div className="flex items-center justify-between mb-2">
-                    <span className="text-vercel-text truncate">
-                      {file.public_id.split('/').pop()}
+                    <span className="text-vercel-text truncate" title={file.original_filename || file.public_id.split('/').pop()}>
+                      {file.original_filename || file.public_id.split('/').pop()}
                     </span>
                     <div className="flex items-center space-x-2">
                       <a
                         href={file.secure_url}
-                        download
+                        download={file.original_filename}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="p-1 rounded-full bg-vercel-card text-vercel-text hover:text-vercel-text-hover transition-colors"
@@ -416,6 +429,15 @@ export default function Dashboard() {
                       </button>
                     </div>
                   </div>
+                  {file.resource_type === 'image' && (
+                    <div className="relative aspect-video rounded-lg overflow-hidden bg-vercel-black">
+                      <img
+                        src={file.secure_url}
+                        alt={file.original_filename || 'Image'}
+                        className="absolute inset-0 w-full h-full object-contain"
+                      />
+                    </div>
+                  )}
                 </div>
               ))}
             </div>

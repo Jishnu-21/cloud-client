@@ -42,4 +42,36 @@ export const employees: Employee[] = [
     department: 'Management',
     cloudinaryFolder: '3S006'
   },
+  {
+    employeeId: '3S007',
+    name: 'Anniket',
+    department: 'Design',
+    cloudinaryFolder: '3S007'
+  },
+  {
+    employeeId: '3S008',
+    name: 'Anandhi',
+    department: 'Design',
+    cloudinaryFolder: '3S008'
+  },
+  {
+    employeeId: '3S009',
+    name: 'Payal',
+    department: 'Design',
+    cloudinaryFolder: '3S009'
+  },
+  {
+    employeeId: '3S010',
+    name: 'Deepak Sahu',
+    department: 'CEO',
+    cloudinaryFolder: '3S010'
+  },
+  {
+    employeeId: '3S011',
+    name: 'Ayyaz Shaikh',
+    department: 'MD',
+    cloudinaryFolder: '3S011'
+  },
+
+
 ];
