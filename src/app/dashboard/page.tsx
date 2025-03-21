@@ -316,13 +316,14 @@ export default function Dashboard() {
   return (
     <div className="min-h-screen bg-vercel-black">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="flex justify-between items-center mb-8">
+        {/* Header Section */}
+        <div className="flex justify-between items-center mb-8 animate-fade-in">
           <div className="flex items-center space-x-4">
-            <h1 className="text-2xl font-bold text-vercel-text">Cloud Storage</h1>
+            <h1 className="text-3xl font-bold text-vercel-text tracking-tight">Cloud Storage</h1>
             {currentPath && (
               <button
                 onClick={handleNavigateUp}
-                className="p-2 rounded-lg bg-vercel-card text-vercel-text hover:bg-vercel-card-hover transition-colors"
+                className="p-2 rounded-lg bg-vercel-card text-vercel-text hover:bg-vercel-card-hover transition-all duration-200 ease-in-out transform hover:scale-105"
               >
                 Go Back
               </button>
@@ -331,12 +332,12 @@ export default function Dashboard() {
           <div className="flex items-center space-x-4">
             <button
               onClick={() => setIsCreatingFolder(true)}
-              className="flex items-center space-x-2 px-4 py-2 rounded-lg bg-vercel-card text-vercel-text hover:bg-vercel-card-hover transition-colors"
+              className="flex items-center space-x-2 px-4 py-2 rounded-lg bg-vercel-card text-vercel-text hover:bg-vercel-card-hover transition-all duration-200 ease-in-out transform hover:scale-105"
             >
               <FolderPlusIcon className="h-5 w-5" />
               <span>New Folder</span>
             </button>
-            <label className="flex items-center space-x-2 px-4 py-2 rounded-lg bg-vercel-card text-vercel-text hover:bg-vercel-card-hover transition-colors cursor-pointer">
+            <label className="flex items-center space-x-2 px-4 py-2 rounded-lg bg-vercel-primary text-vercel-button-text hover:bg-vercel-button-hover hover:text-vercel-button-text-hover transition-all duration-200 ease-in-out transform hover:scale-105 cursor-pointer">
               <ArrowUpTrayIcon className="h-5 w-5" />
               <span>Upload File</span>
               <input
@@ -348,7 +349,7 @@ export default function Dashboard() {
             </label>
             <button
               onClick={handleLogout}
-              className="flex items-center space-x-2 px-4 py-2 rounded-lg bg-vercel-error text-white hover:bg-red-600 transition-colors"
+              className="flex items-center space-x-2 px-4 py-2 rounded-lg bg-vercel-error text-white hover:bg-red-600 transition-all duration-200 ease-in-out transform hover:scale-105"
             >
               <ArrowRightOnRectangleIcon className="h-5 w-5" />
               <span>Logout</span>
@@ -356,37 +357,53 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* Current Path Display */}
+        {/* Breadcrumb Navigation */}
         {currentPath && (
-          <div className="mb-4 p-4 rounded-lg bg-vercel-card">
-            <p className="text-vercel-text">
-              Current Path: {currentPath}
-            </p>
+          <div className="mb-6 p-4 rounded-lg bg-vercel-card animate-slide-in">
+            <div className="flex items-center space-x-2 text-vercel-text">
+              <button 
+                onClick={() => setCurrentPath('')}
+                className="hover:text-vercel-primary transition-colors"
+              >
+                Root
+              </button>
+              {currentPath.split('/').map((part, index, array) => (
+                <div key={index} className="flex items-center space-x-2">
+                  <span className="text-vercel-text-secondary">/</span>
+                  <button
+                    onClick={() => setCurrentPath(array.slice(0, index + 1).join('/'))}
+                    className="hover:text-vercel-primary transition-colors"
+                  >
+                    {part}
+                  </button>
+                </div>
+              ))}
+            </div>
           </div>
         )}
 
         {/* Folders Grid */}
         {folders.length > 0 && (
-          <div className="mb-8">
+          <div className="mb-8 animate-fade-in">
             <h2 className="text-xl font-semibold text-vercel-text mb-4">Folders</h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
               {folders.map((folder) => (
                 <div
                   key={folder.path}
-                  className="relative group p-4 rounded-lg bg-vercel-card hover:bg-vercel-card-hover transition-colors"
+                  className="relative group p-4 rounded-lg bg-vercel-card hover:bg-vercel-card-hover transition-all duration-200 ease-in-out transform hover:-translate-y-1 hover:shadow-lg card-hover"
                 >
                   <div className="flex items-center justify-between">
                     <button
                       onClick={() => handleFolderClick(folder)}
-                      className="flex items-center space-x-2 text-vercel-text hover:text-vercel-text-hover"
+                      className="flex items-center space-x-2 text-vercel-text group-hover:text-vercel-primary transition-colors flex-grow truncate pr-2"
                     >
-                      <FolderIcon className="h-6 w-6" />
+                      <FolderIcon className="h-6 w-6 flex-shrink-0" />
                       <span className="truncate">{folder.name}</span>
                     </button>
                     <button
                       onClick={() => handleDeleteFolder(folder)}
                       disabled={isDeletingFolder && selectedFolder?.path === folder.path}
-                      className="p-1 rounded-full bg-vercel-card text-vercel-error hover:text-red-400 transition-colors"
+                      className="p-1.5 rounded-full bg-vercel-card text-vercel-error hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100"
                     >
                       <TrashIcon className="h-5 w-5" />
                     </button>
@@ -399,38 +416,38 @@ export default function Dashboard() {
 
         {/* Files Grid */}
         {files.length > 0 && (
-          <div>
+          <div className="animate-fade-in">
             <h2 className="text-xl font-semibold text-vercel-text mb-4">Files</h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
               {files.map((file) => (
                 <div
                   key={file.public_id}
-                  className="relative group p-4 rounded-lg bg-vercel-card hover:bg-vercel-card-hover transition-colors"
+                  className="relative group p-4 rounded-lg bg-vercel-card hover:bg-vercel-card-hover transition-all duration-200 ease-in-out transform hover:-translate-y-1 hover:shadow-lg card-hover"
                 >
                   <div className="flex items-center justify-between mb-2">
-                    <span className="text-vercel-text truncate" title={file.original_filename || file.public_id.split('/').pop()}>
+                    <span className="text-vercel-text truncate flex-grow pr-2" title={file.original_filename || file.public_id.split('/').pop()}>
                       {file.original_filename || file.public_id.split('/').pop()}
                     </span>
-                    <div className="flex items-center space-x-2">
+                    <div className="flex items-center space-x-2 opacity-0 group-hover:opacity-100 transition-opacity">
                       <a
                         href={file.secure_url}
                         download={file.original_filename}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="p-1 rounded-full bg-vercel-card text-vercel-text hover:text-vercel-text-hover transition-colors"
+                        className="p-1.5 rounded-full bg-vercel-card text-vercel-text hover:text-vercel-primary transition-colors"
                       >
                         <ArrowDownTrayIcon className="h-5 w-5" />
                       </a>
                       <button
                         onClick={() => handleDeleteFile(file.public_id)}
-                        className="p-1 rounded-full bg-vercel-card text-vercel-error hover:text-red-400 transition-colors"
+                        className="p-1.5 rounded-full bg-vercel-card text-vercel-error hover:text-red-400 transition-colors"
                       >
                         <TrashIcon className="h-5 w-5" />
                       </button>
                     </div>
                   </div>
                   {file.resource_type === 'image' && (
-                    <div className="relative aspect-video rounded-lg overflow-hidden bg-vercel-black">
+                    <div className="relative aspect-video rounded-lg overflow-hidden bg-vercel-black group-hover:ring-2 ring-vercel-primary transition-all">
                       <img
                         src={file.secure_url}
                         alt={file.original_filename || 'Image'}
@@ -446,22 +463,45 @@ export default function Dashboard() {
 
         {/* Empty State */}
         {files.length === 0 && folders.length === 0 && (
-          <div className="text-center py-12">
-            <p className="text-vercel-text-secondary">No files or folders found.</p>
+          <div className="text-center py-16 animate-fade-in">
+            <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-vercel-card mb-4">
+              <FolderIcon className="h-8 w-8 text-vercel-text-secondary" />
+            </div>
+            <h3 className="text-xl font-semibold text-vercel-text mb-2">No files or folders</h3>
+            <p className="text-vercel-text-secondary mb-6">Upload a file or create a new folder to get started</p>
+            <div className="flex justify-center space-x-4">
+              <button
+                onClick={() => setIsCreatingFolder(true)}
+                className="flex items-center space-x-2 px-4 py-2 rounded-lg bg-vercel-card text-vercel-text hover:bg-vercel-card-hover transition-all duration-200 ease-in-out transform hover:scale-105"
+              >
+                <FolderPlusIcon className="h-5 w-5" />
+                <span>New Folder</span>
+              </button>
+              <label className="flex items-center space-x-2 px-4 py-2 rounded-lg bg-vercel-primary text-vercel-button-text hover:bg-vercel-button-hover hover:text-vercel-button-text-hover transition-all duration-200 ease-in-out transform hover:scale-105 cursor-pointer">
+                <ArrowUpTrayIcon className="h-5 w-5" />
+                <span>Upload File</span>
+                <input
+                  type="file"
+                  onChange={handleFileUpload}
+                  className="hidden"
+                />
+              </label>
+            </div>
           </div>
         )}
 
-        {/* Create Folder Dialog */}
+        {/* Create Folder Modal */}
         {isCreatingFolder && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4">
-            <div className="bg-vercel-card rounded-lg p-6 w-full max-w-md">
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 animate-fade-in">
+            <div className="bg-vercel-card rounded-lg p-6 w-full max-w-md animate-slide-in">
               <h3 className="text-lg font-semibold text-vercel-text mb-4">Create New Folder</h3>
               <input
                 type="text"
                 value={newFolderName}
                 onChange={(e) => setNewFolderName(e.target.value)}
                 placeholder="Enter folder name"
-                className="w-full p-2 mb-4 rounded bg-vercel-black text-vercel-text border border-vercel-border focus:outline-none focus:ring-2 focus:ring-vercel-primary"
+                className="w-full p-3 mb-4 rounded-lg bg-vercel-black text-vercel-text border border-vercel-border focus:outline-none focus:ring-2 focus:ring-vercel-primary transition-all"
+                autoFocus
               />
               <div className="flex justify-end space-x-4">
                 <button
@@ -469,14 +509,14 @@ export default function Dashboard() {
                     setNewFolderName('');
                     setIsCreatingFolder(false);
                   }}
-                  className="px-4 py-2 rounded bg-vercel-black text-vercel-text hover:bg-vercel-card-hover transition-colors"
+                  className="px-4 py-2 rounded-lg bg-vercel-black text-vercel-text hover:bg-vercel-card-hover transition-all duration-200"
                 >
                   Cancel
                 </button>
                 <button
                   onClick={handleCreateFolder}
                   disabled={!newFolderName.trim()}
-                  className="px-4 py-2 rounded bg-vercel-button text-vercel-button-text hover:bg-vercel-button-hover disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  className="px-4 py-2 rounded-lg bg-vercel-primary text-vercel-button-text hover:bg-vercel-button-hover hover:text-vercel-button-text-hover disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
                 >
                   Create
                 </button>

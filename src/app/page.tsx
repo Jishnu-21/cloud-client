@@ -88,10 +88,6 @@ export default function Home() {
           </div>
         </form>
       </div>
-      <div className="mt-8 flex flex-col items-center justify-center space-y-2">
-        <span className="text-vercel-text-secondary text-sm">Powered by<span className="text-white px-1 font-semibold text-lg">Cloudinary</span>
-        </span>
-      </div>
     </div>
   );
 }
