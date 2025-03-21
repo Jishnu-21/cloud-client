@@ -13,11 +13,11 @@ import {
   ArrowRightOnRectangleIcon
 } from '@heroicons/react/24/outline';
 
-interface File {
+interface CloudinaryFile {
   public_id: string;
-  format: string;
-  resource_type: string;
   secure_url: string;
+  resource_type: string;
+  format: string;
   created_at: string;
 }
 
@@ -28,7 +28,7 @@ interface Folder {
 
 export default function Dashboard() {
   const router = useRouter();
-  const [files, setFiles] = useState<File[]>([]);
+  const [files, setFiles] = useState<CloudinaryFile[]>([]);
   const [folders, setFolders] = useState<Folder[]>([]);
   const [currentPath, setCurrentPath] = useState('');
   const [newFolderName, setNewFolderName] = useState('');
@@ -58,7 +58,7 @@ export default function Dashboard() {
         handleTokenError();
         return;
       }
-      const response = await axios.get('http://localhost:5000/api/cloudinary/files', {
+      const response = await axios.get('/api/cloudinary/files', {
         params: { path: currentPath },
         headers: { Authorization: `Bearer ${token}` }
       });
@@ -69,47 +69,107 @@ export default function Dashboard() {
         handleTokenError();
         return;
       }
-      toast.error('Failed to fetch files: ' + (error.response?.data?.message || error.message));
+      toast.error('Failed to fetch files');
       console.error('Error fetching files:', error);
     }
   };
 
-  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const files = event.target.files;
-    if (!files) return;
-
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+  
     const formData = new FormData();
-    formData.append('file', files[0]);
+    formData.append('file', file);
     if (currentPath) {
       formData.append('path', currentPath);
     }
-
+  
     try {
       const token = localStorage.getItem('token');
       if (!token) {
         handleTokenError();
         return;
       }
-      await axios.post('http://localhost:5000/api/cloudinary/upload', formData, {
+  
+      // Show loading toast
+      const loadingToast = toast.loading('Uploading file...');
+  
+      // Upload the file
+      const response = await axios.post('/api/cloudinary/upload', formData, {
         headers: {
           'Content-Type': 'multipart/form-data',
           Authorization: `Bearer ${token}`
         }
       });
-      toast.success('File uploaded successfully');
-      fetchFiles();
+  
+      // Create a proper file object with the information we have
+      const fileName = file.name;
+      const newFile = {
+        public_id: response.data.publicId,
+        secure_url: response.data.url,
+        resource_type: response.data.resource_type || 'image',
+        format: response.data.format || fileName.split('.').pop() || '',
+        created_at: new Date().toISOString()
+      };
+  
+      // Update files state with the new file
+      setFiles(prevFiles => [...prevFiles, newFile]);
+  
+      // Update loading toast to success
+      toast.update(loadingToast, {
+        render: "File uploaded successfully",
+        type: "success",
+        isLoading: false,
+        autoClose: 3000
+      });
     } catch (error: any) {
       if (error.response?.status === 401) {
         handleTokenError();
         return;
       }
-      toast.error('Failed to upload file: ' + (error.response?.data?.message || error.message));
+      const errorMessage = error.response?.data?.message || error.response?.data?.error || error.message;
+      toast.error('Failed to upload file: ' + errorMessage);
       console.error('Error uploading file:', error);
     }
   };
+  
+  const handleDeleteFolder = async (folder: Folder) => {
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        handleTokenError();
+        return;
+      }
 
-  const createFolder = async () => {
-    if (!newFolderName.trim()) return;
+      setIsDeletingFolder(true);
+      setSelectedFolder(folder);
+
+      await axios.delete('/api/cloudinary/folder', {
+        params: { path: folder.path },
+        headers: { Authorization: `Bearer ${token}` }
+      });
+
+      setSelectedFolder(null);
+      setIsDeletingFolder(false);
+      fetchFiles();
+      toast.success('Folder deleted successfully');
+    } catch (error: any) {
+      setSelectedFolder(null);
+      setIsDeletingFolder(false);
+      if (error.response?.status === 401) {
+        handleTokenError();
+        return;
+      }
+      toast.error('Failed to delete folder');
+      console.error('Error deleting folder:', error);
+    }
+  };
+
+  const handleCreateFolder = async () => {
+    if (!newFolderName.trim()) {
+      toast.error('Please enter a folder name');
+      return;
+    }
 
     try {
       const token = localStorage.getItem('token');
@@ -117,22 +177,26 @@ export default function Dashboard() {
         handleTokenError();
         return;
       }
-      await axios.post('http://localhost:5000/api/cloudinary/folder', {
+
+      setIsCreatingFolder(true);
+      await axios.post('/api/cloudinary/folder', {
         name: newFolderName,
         path: currentPath
       }, {
         headers: { Authorization: `Bearer ${token}` }
       });
+
       setNewFolderName('');
       setIsCreatingFolder(false);
-      toast.success('Folder created successfully');
       fetchFiles();
+      toast.success('Folder created successfully');
     } catch (error: any) {
+      setIsCreatingFolder(false);
       if (error.response?.status === 401) {
         handleTokenError();
         return;
       }
-      toast.error('Failed to create folder: ' + (error.response?.data?.message || error.message));
+      toast.error('Failed to create folder');
       console.error('Error creating folder:', error);
     }
   };
@@ -146,7 +210,7 @@ export default function Dashboard() {
         handleTokenError();
         return;
       }
-      await axios.delete('http://localhost:5000/api/cloudinary/folder', {
+      await axios.delete('/api/cloudinary/folder', {
         params: { path: selectedFolder.path },
         headers: { Authorization: `Bearer ${token}` }
       });
@@ -170,25 +234,26 @@ export default function Dashboard() {
     }
   };
 
-  const deleteFile = async (publicId: string) => {
+  const handleDeleteFile = async (publicId: string) => {
     try {
       const token = localStorage.getItem('token');
       if (!token) {
         handleTokenError();
         return;
       }
-      await axios.delete(`http://localhost:5000/api/cloudinary/files/${publicId}`, {
+  
+      const response = await axios.delete(`/api/cloudinary/files/${encodeURIComponent(publicId)}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
+  
+      setFiles(prevFiles => prevFiles.filter(file => file.public_id !== publicId));
       toast.success('File deleted successfully');
-      fetchFiles();
     } catch (error: any) {
       if (error.response?.status === 401) {
         handleTokenError();
         return;
       }
-      const errorMessage = error.response?.data?.message || error.response?.data?.error || error.message;
-      toast.error('Failed to delete file: ' + errorMessage);
+      toast.error('Failed to delete file');
       console.error('Error deleting file:', error);
     }
   };
@@ -196,6 +261,7 @@ export default function Dashboard() {
   const handleLogout = () => {
     localStorage.removeItem('token');
     router.push('/');
+    toast.success('Logged out successfully');
   };
 
   const navigateToFolder = (folderPath: string) => {
@@ -217,203 +283,185 @@ export default function Dashboard() {
     document.body.removeChild(a);
   };
 
+  const getFileName = (file: CloudinaryFile) => {
+    if (!file || !file.public_id) {
+      return 'Untitled';
+    }
+    return file.public_id.split('/').pop() || 'Untitled';
+  };
+
+  const handleFolderClick = (folder: Folder) => {
+    setCurrentPath(folder.path);
+  };
+
+  const handleNavigateUp = () => {
+    if (!currentPath) return;
+    const pathParts = currentPath.split('/');
+    pathParts.pop();
+    setCurrentPath(pathParts.join('/'));
+  };
+
   return (
     <div className="min-h-screen bg-vercel-black">
-      <div className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
-        <div className="px-4 py-6 sm:px-0">
-          <div className="flex justify-between items-center mb-6">
-            <div>
-              <h1 className="text-2xl font-semibold text-vercel-text">Cloud Storage</h1>
-              <p className="text-sm text-vercel-text-secondary mt-1">
-                Current path: {currentPath || 'Root'}
-              </p>
-            </div>
-            <div className="flex space-x-4">
-              <button
-                onClick={() => setIsCreatingFolder(true)}
-                className="inline-flex items-center px-4 py-2 border border-vercel-border rounded-md shadow-sm text-sm font-medium text-vercel-text bg-vercel-card hover:bg-vercel-dark focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-vercel-primary transition-colors"
-              >
-                <FolderPlusIcon className="h-5 w-5 mr-2" />
-                New Folder
-              </button>
-              <label className="inline-flex items-center px-4 py-2 border border-vercel-border rounded-md shadow-sm text-sm font-medium text-vercel-button-text bg-vercel-button hover:bg-vercel-button-hover hover:text-vercel-button-text-hover focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-vercel-primary cursor-pointer transition-colors">
-                <ArrowUpTrayIcon className="h-5 w-5 mr-2" />
-                Upload File
-                <input type="file" className="hidden" onChange={handleFileUpload} />
-              </label>
-              <button
-                onClick={handleLogout}
-                className="inline-flex items-center px-4 py-2 border border-vercel-border rounded-md shadow-sm text-sm font-medium text-vercel-text bg-vercel-error hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-colors"
-              >
-                <ArrowRightOnRectangleIcon className="h-5 w-5 mr-2" />
-                Logout
-              </button>
-            </div>
-          </div>
-
-          {isCreatingFolder && (
-            <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center">
-              <div className="bg-vercel-card rounded-lg px-4 pt-5 pb-4 sm:p-6 sm:pb-4 border border-vercel-border">
-                <div className="sm:flex sm:items-start">
-                  <div className="mt-3 text-center sm:mt-0 sm:text-left">
-                    <h3 className="text-lg leading-6 font-medium text-vercel-text">Create New Folder</h3>
-                    <div className="mt-2">
-                      <input
-                        type="text"
-                        value={newFolderName}
-                        onChange={(e) => setNewFolderName(e.target.value)}
-                        className="mt-1 block w-full rounded-md border-vercel-border bg-vercel-dark text-vercel-text shadow-sm focus:border-vercel-primary focus:ring-vercel-primary sm:text-sm"
-                        placeholder="Folder name"
-                      />
-                    </div>
-                  </div>
-                </div>
-                <div className="mt-5 sm:mt-4 sm:flex sm:flex-row-reverse">
-                  <button
-                    type="button"
-                    onClick={createFolder}
-                    className="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-vercel-button text-base font-medium text-vercel-button-text hover:bg-vercel-button-hover hover:text-vercel-button-text-hover focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-vercel-primary sm:ml-3 sm:w-auto sm:text-sm transition-colors"
-                  >
-                    Create
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setIsCreatingFolder(false)}
-                    className="mt-3 w-full inline-flex justify-center rounded-md border border-vercel-border shadow-sm px-4 py-2 bg-vercel-card text-base font-medium text-vercel-text hover:bg-vercel-dark focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-vercel-primary sm:mt-0 sm:w-auto sm:text-sm transition-colors"
-                  >
-                    Cancel
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {isDeletingFolder && selectedFolder && (
-            <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center">
-              <div className="bg-vercel-card rounded-lg px-4 pt-5 pb-4 sm:p-6 sm:pb-4 border border-vercel-border">
-                <div className="sm:flex sm:items-start">
-                  <div className="mt-3 text-center sm:mt-0 sm:text-left">
-                    <h3 className="text-lg leading-6 font-medium text-vercel-text">Delete Folder</h3>
-                    <div className="mt-2">
-                      <p className="text-sm text-vercel-text-secondary">
-                        Are you sure you want to delete the folder "{selectedFolder.name}"? This action cannot be undone.
-                      </p>
-                    </div>
-                  </div>
-                </div>
-                <div className="mt-5 sm:mt-4 sm:flex sm:flex-row-reverse">
-                  <button
-                    type="button"
-                    onClick={deleteFolder}
-                    className="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-vercel-error text-base font-medium text-vercel-text hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 sm:ml-3 sm:w-auto sm:text-sm transition-colors"
-                  >
-                    Delete
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setIsDeletingFolder(false);
-                      setSelectedFolder(null);
-                    }}
-                    className="mt-3 w-full inline-flex justify-center rounded-md border border-vercel-border shadow-sm px-4 py-2 bg-vercel-card text-base font-medium text-vercel-text hover:bg-vercel-dark focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-vercel-primary sm:mt-0 sm:w-auto sm:text-sm transition-colors"
-                  >
-                    Cancel
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
-
-          <div className="bg-vercel-card shadow rounded-lg border border-vercel-border">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="flex justify-between items-center mb-8">
+          <div className="flex items-center space-x-4">
+            <h1 className="text-2xl font-bold text-vercel-text">Cloud Storage</h1>
             {currentPath && (
-              <div className="px-4 py-3 border-b border-vercel-border">
-                <button
-                  onClick={navigateUp}
-                  className="text-vercel-link hover:text-vercel-link-hover transition-colors"
-                >
-                  ← Back to Parent Folder
-                </button>
-              </div>
+              <button
+                onClick={handleNavigateUp}
+                className="p-2 rounded-lg bg-vercel-card text-vercel-text hover:bg-vercel-card-hover transition-colors"
+              >
+                Go Back
+              </button>
             )}
-            
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 p-4">
+          </div>
+          <div className="flex items-center space-x-4">
+            <button
+              onClick={() => setIsCreatingFolder(true)}
+              className="flex items-center space-x-2 px-4 py-2 rounded-lg bg-vercel-card text-vercel-text hover:bg-vercel-card-hover transition-colors"
+            >
+              <FolderPlusIcon className="h-5 w-5" />
+              <span>New Folder</span>
+            </button>
+            <label className="flex items-center space-x-2 px-4 py-2 rounded-lg bg-vercel-card text-vercel-text hover:bg-vercel-card-hover transition-colors cursor-pointer">
+              <ArrowUpTrayIcon className="h-5 w-5" />
+              <span>Upload File</span>
+              <input
+                type="file"
+                onChange={handleFileUpload}
+                className="hidden"
+              />
+            </label>
+            <button
+              onClick={handleLogout}
+              className="flex items-center space-x-2 px-4 py-2 rounded-lg bg-vercel-error text-white hover:bg-red-600 transition-colors"
+            >
+              <ArrowRightOnRectangleIcon className="h-5 w-5" />
+              <span>Logout</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Current Path Display */}
+        {currentPath && (
+          <div className="mb-4 p-4 rounded-lg bg-vercel-card">
+            <p className="text-vercel-text">
+              Current Path: {currentPath}
+            </p>
+          </div>
+        )}
+
+        {/* Folders Grid */}
+        {folders.length > 0 && (
+          <div className="mb-8">
+            <h2 className="text-xl font-semibold text-vercel-text mb-4">Folders</h2>
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
               {folders.map((folder) => (
                 <div
                   key={folder.path}
-                  className="flex items-center justify-between p-4 rounded-lg border border-vercel-border hover:bg-vercel-dark group transition-colors"
+                  className="relative group p-4 rounded-lg bg-vercel-card hover:bg-vercel-card-hover transition-colors"
                 >
-                  <div
-                    className="flex items-center space-x-3 cursor-pointer flex-grow"
-                    onClick={() => navigateToFolder(folder.path)}
-                  >
-                    <FolderIcon className="h-6 w-6 text-vercel-primary" />
-                    <span className="text-vercel-text">{folder.name}</span>
+                  <div className="flex items-center justify-between">
+                    <button
+                      onClick={() => handleFolderClick(folder)}
+                      className="flex items-center space-x-2 text-vercel-text hover:text-vercel-text-hover"
+                    >
+                      <FolderIcon className="h-6 w-6" />
+                      <span className="truncate">{folder.name}</span>
+                    </button>
+                    <button
+                      onClick={() => handleDeleteFolder(folder)}
+                      disabled={isDeletingFolder && selectedFolder?.path === folder.path}
+                      className="p-1 rounded-full bg-vercel-card text-vercel-error hover:text-red-400 transition-colors"
+                    >
+                      <TrashIcon className="h-5 w-5" />
+                    </button>
                   </div>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setSelectedFolder(folder);
-                      setIsDeletingFolder(true);
-                    }}
-                    className="text-vercel-error hover:text-red-400 p-1 rounded opacity-0 group-hover:opacity-100 transition-opacity"
-                  >
-                    <TrashIcon className="h-5 w-5" />
-                  </button>
                 </div>
               ))}
-              
+            </div>
+          </div>
+        )}
+
+        {/* Files Grid */}
+        {files.length > 0 && (
+          <div>
+            <h2 className="text-xl font-semibold text-vercel-text mb-4">Files</h2>
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
               {files.map((file) => (
                 <div
                   key={file.public_id}
-                  className="flex flex-col p-4 space-y-2 rounded-lg border border-vercel-border group hover:bg-vercel-dark transition-colors"
+                  className="relative group p-4 rounded-lg bg-vercel-card hover:bg-vercel-card-hover transition-colors"
                 >
-                  <div className="relative">
-                    {file.resource_type === 'image' ? (
-                      <a href={file.secure_url} target="_blank" rel="noopener noreferrer">
-                        <img
-                          src={file.secure_url}
-                          alt={file.public_id}
-                          className="h-32 w-full object-cover rounded border border-vercel-border"
-                        />
-                      </a>
-                    ) : (
-                      <div className="h-32 w-full flex items-center justify-center bg-vercel-black rounded border border-vercel-border">
-                        <span className="text-vercel-text-secondary text-lg font-medium">
-                          {file.format ? file.format.toUpperCase() : file.resource_type?.toUpperCase() || 'FILE'}
-                        </span>
-                      </div>
-                    )}
-                    <div className="absolute top-2 right-2 flex space-x-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <button
-                        onClick={() => downloadFile(file.secure_url, file.public_id.split('/').pop() || 'download')}
-                        className="p-1 rounded-full bg-vercel-card text-vercel-primary hover:text-white transition-colors"
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-vercel-text truncate">
+                      {file.public_id.split('/').pop()}
+                    </span>
+                    <div className="flex items-center space-x-2">
+                      <a
+                        href={file.secure_url}
+                        download
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="p-1 rounded-full bg-vercel-card text-vercel-text hover:text-vercel-text-hover transition-colors"
                       >
                         <ArrowDownTrayIcon className="h-5 w-5" />
-                      </button>
+                      </a>
                       <button
-                        onClick={() => deleteFile(file.public_id)}
+                        onClick={() => handleDeleteFile(file.public_id)}
                         className="p-1 rounded-full bg-vercel-card text-vercel-error hover:text-red-400 transition-colors"
                       >
                         <TrashIcon className="h-5 w-5" />
                       </button>
                     </div>
                   </div>
-                  <div className="flex items-center justify-between">
-                    <div className="text-sm text-vercel-text-secondary truncate flex-grow">
-                      {file.public_id.split('/').pop()}
-                    </div>
-                  </div>
                 </div>
               ))}
-              
-              {folders.length === 0 && files.length === 0 && (
-                <div className="col-span-full text-center py-8 text-vercel-text-secondary">
-                  This folder is empty. Upload files or create a new folder to get started.
-                </div>
-              )}
             </div>
           </div>
-        </div>
+        )}
+
+        {/* Empty State */}
+        {files.length === 0 && folders.length === 0 && (
+          <div className="text-center py-12">
+            <p className="text-vercel-text-secondary">No files or folders found.</p>
+          </div>
+        )}
+
+        {/* Create Folder Dialog */}
+        {isCreatingFolder && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4">
+            <div className="bg-vercel-card rounded-lg p-6 w-full max-w-md">
+              <h3 className="text-lg font-semibold text-vercel-text mb-4">Create New Folder</h3>
+              <input
+                type="text"
+                value={newFolderName}
+                onChange={(e) => setNewFolderName(e.target.value)}
+                placeholder="Enter folder name"
+                className="w-full p-2 mb-4 rounded bg-vercel-black text-vercel-text border border-vercel-border focus:outline-none focus:ring-2 focus:ring-vercel-primary"
+              />
+              <div className="flex justify-end space-x-4">
+                <button
+                  onClick={() => {
+                    setNewFolderName('');
+                    setIsCreatingFolder(false);
+                  }}
+                  className="px-4 py-2 rounded bg-vercel-black text-vercel-text hover:bg-vercel-card-hover transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleCreateFolder}
+                  disabled={!newFolderName.trim()}
+                  className="px-4 py-2 rounded bg-vercel-button text-vercel-button-text hover:bg-vercel-button-hover disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                  Create
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

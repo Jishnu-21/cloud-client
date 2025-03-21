@@ -4,7 +4,6 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'react-toastify';
 import axios from 'axios';
-import Image from 'next/image';
 
 interface Employee {
   employeeId: string;
@@ -23,8 +22,8 @@ export default function Home() {
 
   const fetchEmployees = async () => {
     try {
-      const response = await axios.get('http://localhost:5000/api/auth/employees');
-      setEmployees(response.data);
+      const response = await axios.get('/api/auth');
+      setEmployees(response.data.employees);
     } catch (error: any) {
       toast.error('Failed to fetch employees');
     }
@@ -33,7 +32,7 @@ export default function Home() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      const response = await axios.post('http://localhost:5000/api/auth/login', {
+      const response = await axios.post('/api/auth', {
         employeeId: selectedId
       });
       localStorage.setItem('token', response.data.token);
