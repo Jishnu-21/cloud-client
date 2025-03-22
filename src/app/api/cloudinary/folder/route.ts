@@ -20,6 +20,59 @@ const verifyToken = (authHeader: string | null): JwtUser => {
   return decoded as JwtUser;
 };
 
+// Helper function to recursively delete all files in a folder
+async function deleteAllFilesInFolder(folderPath: string) {
+  try {
+    // Get all resources in the folder for each type
+    const imageResources = await cloudinary.api.resources({
+      type: 'upload',
+      prefix: folderPath,
+      resource_type: 'image',
+      max_results: 500
+    });
+
+    const videoResources = await cloudinary.api.resources({
+      type: 'upload',
+      prefix: folderPath,
+      resource_type: 'video',
+      max_results: 500
+    });
+
+    const rawResources = await cloudinary.api.resources({
+      type: 'upload',
+      prefix: folderPath,
+      resource_type: 'raw',
+      max_results: 500
+    });
+
+    // Combine all resources
+    const allResources = [
+      ...(imageResources.resources || []),
+      ...(videoResources.resources || []),
+      ...(rawResources.resources || [])
+    ];
+
+    // Delete each resource
+    for (const resource of allResources) {
+      await cloudinary.uploader.destroy(resource.public_id, {
+        resource_type: resource.resource_type,
+        invalidate: true
+      });
+    }
+
+    // Get subfolders
+    const { folders } = await cloudinary.api.sub_folders(folderPath);
+
+    // Recursively delete files in subfolders
+    for (const folder of folders) {
+      await deleteAllFilesInFolder(folder.path);
+    }
+  } catch (error) {
+    console.error('Error deleting files in folder:', error);
+    throw error;
+  }
+}
+
 export async function POST(req: Request) {
   try {
     const headersList = headers();
@@ -79,7 +132,10 @@ export async function DELETE(req: Request) {
       );
     }
 
-    // Delete folder from Cloudinary
+    // First delete all files in the folder and its subfolders
+    await deleteAllFilesInFolder(path);
+
+    // Then delete the folder from Cloudinary
     const result = await cloudinary.api.delete_folder(path);
 
     if (!result || result.deleted[0] !== path) {
@@ -90,10 +146,10 @@ export async function DELETE(req: Request) {
     }
 
     return NextResponse.json({ message: 'Folder deleted successfully' });
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error deleting folder:', error);
     return NextResponse.json(
-      { message: 'Failed to delete folder' },
+      { message: error.message || 'Failed to delete folder' },
       { status: 500 }
     );
   }

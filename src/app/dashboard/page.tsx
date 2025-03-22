@@ -252,27 +252,42 @@ export default function Dashboard() {
     }
   };
 
-  const handleDeleteFile = async (publicId: string) => {
+  const handleDeleteFile = async (publicId: string, resourceType: string) => {
+    if (!confirm('Are you sure you want to delete this file?')) {
+      return;
+    }
+
     try {
       const token = localStorage.getItem('token');
       if (!token) {
-        handleTokenError();
+        toast.error('Please log in again');
         return;
       }
-  
-      const response = await axios.delete(`/api/cloudinary/files/${encodeURIComponent(publicId)}`, {
-        headers: { Authorization: `Bearer ${token}` }
+
+      const response = await fetch('/api/cloudinary/delete', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ publicId, resourceType }),
       });
-  
-      setFiles(prevFiles => prevFiles.filter(file => file.public_id !== publicId));
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to delete file');
+      }
+
+      // Remove the deleted file from the state
+      setFiles(files.filter(file => file.public_id !== publicId));
       toast.success('File deleted successfully');
     } catch (error: any) {
-      if (error.response?.status === 401) {
-        handleTokenError();
-        return;
-      }
-      toast.error('Failed to delete file');
       console.error('Error deleting file:', error);
+      toast.error(error.message || 'Failed to delete file. Please try again.');
+      
+      // Refresh the file list to ensure we're in sync
+      fetchFiles();
     }
   };
 
@@ -430,8 +445,11 @@ export default function Dashboard() {
                   key={file.public_id}
                   className="relative group bg-black hover:bg-gray-900 transition-all duration-200"
                 >
-                  {/* Thumbnail Preview */}
-                  <div className="aspect-[4/3] w-full overflow-hidden bg-gray-900">
+                  {/* Thumbnail Preview with Quick Preview Button */}
+                  <div 
+                    className="aspect-[4/3] w-full overflow-hidden bg-gray-900 relative cursor-pointer"
+                    onClick={() => setSelectedFile(file)}
+                  >
                     {(() => {
                       const fileType = file.format?.toLowerCase();
                       if (['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(fileType)) {
@@ -466,53 +484,41 @@ export default function Dashboard() {
                         </div>
                       );
                     })()}
+                    
+                    {/* Hover Effect for Preview */}
+                    <div className="absolute inset-0 bg-black bg-opacity-40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                      <EyeIcon className="h-8 w-8 text-white" />
+                    </div>
                   </div>
 
                   {/* File Info & Actions */}
-                  <div className="p-3">
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="text-sm text-gray-300 truncate max-w-[180px]" title={file.public_id.split('/').pop()}>
+                  <div className="p-3 bg-black">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-sm text-gray-300 truncate flex-1" title={file.public_id.split('/').pop()}>
                         {file.public_id.split('/').pop()}
                       </span>
+                      
+                      {/* Action Buttons */}
+                      <div className="flex items-center gap-1 z-10">
+                        <a
+                          href={file.secure_url}
+                          download
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="p-1.5 text-gray-500 hover:text-white transition-colors rounded-full hover:bg-gray-800"
+                          title="Download"
+                        >
+                          <ArrowDownTrayIcon className="h-4 w-4" />
+                        </a>
+                        <button
+                          onClick={() => handleDeleteFile(file.public_id, file.resource_type)}
+                          className="p-1.5 text-gray-500 hover:text-white transition-colors rounded-full hover:bg-gray-800"
+                          title="Delete"
+                        >
+                          <TrashIcon className="h-4 w-4" />
+                        </button>
+                      </div>
                     </div>
-
-                    {/* Actions */}
-                    <div className="flex justify-end space-x-2">
-                      <button
-                        onClick={() => setSelectedFile(file)}
-                        className="p-1.5 text-gray-500 hover:text-white transition-colors"
-                        title="Preview"
-                      >
-                        <EyeIcon className="h-4 w-4" />
-                      </button>
-                      <a
-                        href={file.secure_url}
-                        download
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="p-1.5 text-gray-500 hover:text-white transition-colors"
-                        title="Download"
-                      >
-                        <ArrowDownTrayIcon className="h-4 w-4" />
-                      </a>
-                      <button
-                        onClick={() => handleDeleteFile(file.public_id)}
-                        className="p-1.5 text-gray-500 hover:text-white transition-colors"
-                        title="Delete"
-                      >
-                        <TrashIcon className="h-4 w-4" />
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Hover Overlay */}
-                  <div className="absolute inset-0 bg-black bg-opacity-40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                    <button
-                      onClick={() => setSelectedFile(file)}
-                      className="p-2 bg-black bg-opacity-75 rounded-full text-white hover:bg-opacity-90 transition-all transform hover:scale-110"
-                    >
-                      <EyeIcon className="h-6 w-6" />
-                    </button>
                   </div>
                 </div>
               ))}
