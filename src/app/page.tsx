@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'react-toastify';
 
@@ -12,29 +12,6 @@ export default function Home() {
   const [name, setName] = useState('');
   const [department, setDepartment] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-
-  // Get next available employee ID when switching to register mode
-  useEffect(() => {
-    if (isRegistering) {
-      fetchNextEmployeeId();
-    }
-  }, [isRegistering]);
-
-  const fetchNextEmployeeId = async () => {
-    try {
-      const response = await fetch('/api/employee-id');
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || 'Failed to get employee ID');
-      }
-
-      setEmployeeId(data.employeeId);
-    } catch (error: any) {
-      toast.error(error.message);
-      setIsRegistering(false);
-    }
-  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -100,14 +77,13 @@ export default function Home() {
                 type="text"
                 required
                 className={`${inputClasses} rounded-md`}
-                placeholder="Enter your employee ID"
+                placeholder="Enter your employee ID (e.g., 3S001)"
                 value={employeeId}
                 onChange={(e) => setEmployeeId(e.target.value)}
-                readOnly={isRegistering}
               />
               {isRegistering && (
                 <p className="mt-1 text-xs text-vercel-text-secondary">
-                  Your employee ID has been automatically assigned
+                  Use format: 3S001 to 3S012
                 </p>
               )}
             </div>
