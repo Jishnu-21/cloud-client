@@ -10,8 +10,13 @@ import {
   FolderIcon, 
   TrashIcon,
   ArrowDownTrayIcon,
-  ArrowRightOnRectangleIcon
+  ArrowRightOnRectangleIcon,
+  EyeIcon,
+  DocumentIcon,
+  VideoCameraIcon,
+  PhotoIcon
 } from '@heroicons/react/24/outline';
+import FilePreviewModal from '@/components/FilePreviewModal';
 
 interface CloudinaryFile {
   public_id: string;
@@ -36,6 +41,7 @@ export default function Dashboard() {
   const [isCreatingFolder, setIsCreatingFolder] = useState(false);
   const [isDeletingFolder, setIsDeletingFolder] = useState(false);
   const [selectedFolder, setSelectedFolder] = useState<Folder | null>(null);
+  const [selectedFile, setSelectedFile] = useState<CloudinaryFile | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleTokenError = () => {
@@ -418,43 +424,96 @@ export default function Dashboard() {
         {files.length > 0 && (
           <div className="animate-fade-in">
             <h2 className="text-xl font-semibold text-vercel-text mb-4">Files</h2>
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
               {files.map((file) => (
                 <div
                   key={file.public_id}
-                  className="relative group p-4 rounded-lg bg-vercel-card hover:bg-vercel-card-hover transition-all duration-200 ease-in-out transform hover:-translate-y-1 hover:shadow-lg card-hover"
+                  className="relative group bg-black hover:bg-gray-900 transition-all duration-200"
                 >
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-vercel-text truncate flex-grow pr-2" title={file.original_filename || file.public_id.split('/').pop()}>
-                      {file.original_filename || file.public_id.split('/').pop()}
-                    </span>
-                    <div className="flex items-center space-x-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                  {/* Thumbnail Preview */}
+                  <div className="aspect-[4/3] w-full overflow-hidden bg-gray-900">
+                    {(() => {
+                      const fileType = file.format?.toLowerCase();
+                      if (['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(fileType)) {
+                        return (
+                          <img
+                            src={file.secure_url}
+                            alt={file.public_id}
+                            className="w-full h-full object-contain"
+                          />
+                        );
+                      }
+                      if (['mp4', 'webm', 'mov'].includes(fileType)) {
+                        return (
+                          <div className="w-full h-full flex flex-col items-center justify-center">
+                            <VideoCameraIcon className="h-12 w-12 text-white mb-2" />
+                            <span className="text-xs text-gray-400 uppercase tracking-wider">{fileType}</span>
+                          </div>
+                        );
+                      }
+                      if (fileType === 'pdf') {
+                        return (
+                          <div className="w-full h-full flex flex-col items-center justify-center">
+                            <DocumentIcon className="h-12 w-12 text-white mb-2" />
+                            <span className="text-xs text-gray-400 uppercase tracking-wider">PDF</span>
+                          </div>
+                        );
+                      }
+                      return (
+                        <div className="w-full h-full flex flex-col items-center justify-center">
+                          <DocumentIcon className="h-12 w-12 text-white mb-2" />
+                          <span className="text-xs text-gray-400 uppercase tracking-wider">{fileType || 'File'}</span>
+                        </div>
+                      );
+                    })()}
+                  </div>
+
+                  {/* File Info & Actions */}
+                  <div className="p-3">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-sm text-gray-300 truncate max-w-[180px]" title={file.public_id.split('/').pop()}>
+                        {file.public_id.split('/').pop()}
+                      </span>
+                    </div>
+
+                    {/* Actions */}
+                    <div className="flex justify-end space-x-2">
+                      <button
+                        onClick={() => setSelectedFile(file)}
+                        className="p-1.5 text-gray-500 hover:text-white transition-colors"
+                        title="Preview"
+                      >
+                        <EyeIcon className="h-4 w-4" />
+                      </button>
                       <a
                         href={file.secure_url}
-                        download={file.original_filename}
+                        download
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="p-1.5 rounded-full bg-vercel-card text-vercel-text hover:text-vercel-primary transition-colors"
+                        className="p-1.5 text-gray-500 hover:text-white transition-colors"
+                        title="Download"
                       >
-                        <ArrowDownTrayIcon className="h-5 w-5" />
+                        <ArrowDownTrayIcon className="h-4 w-4" />
                       </a>
                       <button
                         onClick={() => handleDeleteFile(file.public_id)}
-                        className="p-1.5 rounded-full bg-vercel-card text-vercel-error hover:text-red-400 transition-colors"
+                        className="p-1.5 text-gray-500 hover:text-white transition-colors"
+                        title="Delete"
                       >
-                        <TrashIcon className="h-5 w-5" />
+                        <TrashIcon className="h-4 w-4" />
                       </button>
                     </div>
                   </div>
-                  {file.resource_type === 'image' && (
-                    <div className="relative aspect-video rounded-lg overflow-hidden bg-vercel-black group-hover:ring-2 ring-vercel-primary transition-all">
-                      <img
-                        src={file.secure_url}
-                        alt={file.original_filename || 'Image'}
-                        className="absolute inset-0 w-full h-full object-contain"
-                      />
-                    </div>
-                  )}
+
+                  {/* Hover Overlay */}
+                  <div className="absolute inset-0 bg-black bg-opacity-40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                    <button
+                      onClick={() => setSelectedFile(file)}
+                      className="p-2 bg-black bg-opacity-75 rounded-full text-white hover:bg-opacity-90 transition-all transform hover:scale-110"
+                    >
+                      <EyeIcon className="h-6 w-6" />
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>
@@ -524,6 +583,13 @@ export default function Dashboard() {
             </div>
           </div>
         )}
+        
+        {/* Preview Modal */}
+        <FilePreviewModal
+          open={!!selectedFile}
+          onClose={() => setSelectedFile(null)}
+          file={selectedFile}
+        />
       </div>
     </div>
   );

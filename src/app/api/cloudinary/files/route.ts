@@ -49,18 +49,47 @@ export async function GET(req: Request) {
         ? `${user.cloudinaryFolder}/${path}`
         : user.cloudinaryFolder;
 
-    // Get files and folders from Cloudinary
-    const { resources } = await cloudinary.api.resources({
-      type: 'upload',
-      prefix: folderPath,
-      max_results: 500
+    // Get all resource types (images, videos, and raw files)
+    const [imageResources, videoResources, rawResources] = await Promise.all([
+      cloudinary.api.resources({
+        type: 'upload',
+        prefix: folderPath,
+        max_results: 500,
+        resource_type: 'image'
+      }).catch(() => ({ resources: [] })),
+      
+      cloudinary.api.resources({
+        type: 'upload',
+        prefix: folderPath,
+        max_results: 500,
+        resource_type: 'video'
+      }).catch(() => ({ resources: [] })),
+      
+      cloudinary.api.resources({
+        type: 'upload',
+        prefix: folderPath,
+        max_results: 500,
+        resource_type: 'raw'
+      }).catch(() => ({ resources: [] }))
+    ]);
+
+    // Combine all resources
+    const allResources = [
+      ...(imageResources.resources || []),
+      ...(videoResources.resources || []),
+      ...(rawResources.resources || [])
+    ].filter(resource => {
+      // Get the resource's folder path without the file name
+      const resourceFolder = resource.public_id.split('/').slice(0, -1).join('/');
+      // Only include files that are directly in the current folder
+      return resourceFolder === folderPath;
     });
 
     // Get subfolders
     const { folders } = await cloudinary.api.sub_folders(folderPath);
 
     return NextResponse.json({
-      files: (resources as CloudinaryResource[]).map(resource => ({
+      files: allResources.map(resource => ({
         public_id: resource.public_id,
         secure_url: resource.secure_url,
         resource_type: resource.resource_type,

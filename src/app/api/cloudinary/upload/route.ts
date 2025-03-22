@@ -62,8 +62,8 @@ export async function POST(req: Request) {
         {
           folder: uploadPath,
           resource_type: 'auto',
-          use_filename: true,
-          unique_filename: true
+          public_id: file.name.split('.')[0],  // Use original filename without extension as public_id
+          overwrite: true  // Allow overwriting files with same name
         },
         (error, result) => {
           if (error) reject(error);
