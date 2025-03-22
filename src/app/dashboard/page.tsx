@@ -32,6 +32,12 @@ interface Folder {
   path: string;
 }
 
+interface User {
+  employeeId: string;
+  name: string;
+  department: string;
+}
+
 export default function Dashboard() {
   const router = useRouter();
   const [files, setFiles] = useState<CloudinaryFile[]>([]);
@@ -42,6 +48,8 @@ export default function Dashboard() {
   const [isDeletingFolder, setIsDeletingFolder] = useState(false);
   const [selectedFolder, setSelectedFolder] = useState<Folder | null>(null);
   const [selectedFile, setSelectedFile] = useState<CloudinaryFile | null>(null);
+  const [user, setUser] = useState<User | null>(null);
+  const [showModal, setShowModal] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleTokenError = () => {
@@ -56,8 +64,14 @@ export default function Dashboard() {
       handleTokenError();
       return;
     }
+    const userStr = localStorage.getItem('user');
+    if (!userStr) {
+      router.push('/');
+      return;
+    }
+    setUser(JSON.parse(userStr));
     fetchFiles();
-  }, [currentPath]);
+  }, [currentPath, router]);
 
   const fetchFiles = async () => {
     try {
@@ -293,6 +307,7 @@ export default function Dashboard() {
 
   const handleLogout = () => {
     localStorage.removeItem('token');
+    localStorage.removeItem('user');
     router.push('/');
     toast.success('Logged out successfully');
   };
@@ -374,6 +389,12 @@ export default function Dashboard() {
             >
               <ArrowRightOnRectangleIcon className="h-5 w-5" />
               <span>Logout</span>
+            </button>
+            <button
+              onClick={() => setShowModal(true)}
+              className="flex items-center justify-center w-10 h-10 rounded-full bg-white text-black hover:bg-black hover:text-white border border-white transition-all z-10"
+            >
+              {user?.name?.charAt(0).toUpperCase()}
             </button>
           </div>
         </div>
@@ -585,6 +606,43 @@ export default function Dashboard() {
                 >
                   Create
                 </button>
+              </div>
+            </div>
+          </div>
+        )}
+        
+        {/* Profile Modal */}
+        {showModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+            <div className="bg-vercel-card rounded-lg p-6 max-w-sm w-full border border-white/10">
+              <div className="flex justify-between items-center mb-4">
+                <h2 className="text-xl font-semibold text-white">Profile Details</h2>
+                <button
+                  onClick={() => setShowModal(false)}
+                  className="text-gray-400 hover:text-white transition-colors"
+                >
+                  ✕
+                </button>
+              </div>
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-400 mb-1">
+                    Employee ID
+                  </label>
+                  <p className="text-white">{user?.employeeId}</p>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-400 mb-1">
+                    Name
+                  </label>
+                  <p className="text-white">{user?.name}</p>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-400 mb-1">
+                    Department
+                  </label>
+                  <p className="text-white">{user?.department}</p>
+                </div>
               </div>
             </div>
           </div>
