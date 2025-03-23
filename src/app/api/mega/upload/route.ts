@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { headers } from 'next/headers';
 import jwt from 'jsonwebtoken';
 import { megaClient } from '@/lib/mega';
@@ -20,47 +20,61 @@ const verifyToken = (authHeader: string | null): JwtUser => {
   return decoded as JwtUser;
 };
 
-export async function POST(req: Request) {
+export const config = {
+  api: {
+    bodyParser: false,
+    responseLimit: false,
+  },
+};
+
+export async function POST(req: NextRequest): Promise<NextResponse> {
   try {
     const headersList = headers();
     const authHeader = headersList.get('authorization');
+
+    // Verify JWT token
     const user = verifyToken(authHeader);
 
-    // Get form data
+    // Initialize MEGA client if needed
+    await megaClient.initialize({
+      email: process.env.MEGA_EMAIL || '',
+      password: process.env.MEGA_PASSWORD || '',
+    });
+
+    // Get form data with streaming support
     const formData = await req.formData();
     const file = formData.get('file') as File;
     const path = formData.get('path') as string || '';
 
     if (!file) {
-      return NextResponse.json(
-        { error: 'No file provided' },
-        { status: 400 }
-      );
+      throw new Error('No file provided');
     }
 
     // If path already includes the user's folder, use it directly
-    // Otherwise, prepend the user's folder
     const folderPath = path.startsWith(user.employeeId)
       ? path
       : path
         ? `${user.employeeId}/${path}`
         : user.employeeId;
 
-    // Initialize MEGA client
-    await megaClient.initialize({
-      email: process.env.MEGA_EMAIL || '',
-      password: process.env.MEGA_PASSWORD || '',
+    // Upload file to MEGA
+    const arrayBuffer = await file.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
+    
+    // Create a new File object from the buffer
+    const uploadFile = new File([buffer], file.name, {
+      type: file.type,
+      lastModified: file.lastModified,
     });
 
-    // Upload file
-    const result = await megaClient.uploadFile(file, folderPath);
+    const result = await megaClient.uploadFile(uploadFile, folderPath);
 
-    return NextResponse.json(result);
-  } catch (error: any) {
-    console.error('Error uploading file:', error);
+    return NextResponse.json({ success: true, file: result });
+  } catch (error) {
+    console.error('Error in upload:', error);
     return NextResponse.json(
-      { error: error.message || 'Failed to upload file' },
-      { status: error.message === 'Invalid token' ? 401 : 500 }
+      { error: error instanceof Error ? error.message : 'Upload failed' },
+      { status: error instanceof Error ? 400 : 500 }
     );
   }
 }
