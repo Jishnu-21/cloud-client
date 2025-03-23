@@ -20,9 +20,17 @@ const verifyToken = (authHeader: string | null): JwtUser => {
   return decoded as JwtUser;
 };
 
-// Instead, use the new route segment config
+// Configure for large file uploads
+export const maxDuration = 300; // 5 minutes timeout
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
+
+// Add custom configuration for large files
+export const fetchCache = 'force-no-store';
+export const revalidate = 0;
+export const bodyParser = {
+  sizeLimit: '500mb' // Or use '0' for unlimited
+};
 
 export async function POST(req: NextRequest): Promise<NextResponse> {
   try {
