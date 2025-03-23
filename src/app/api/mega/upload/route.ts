@@ -20,12 +20,9 @@ const verifyToken = (authHeader: string | null): JwtUser => {
   return decoded as JwtUser;
 };
 
-export const config = {
-  api: {
-    bodyParser: false,
-    responseLimit: false,
-  },
-};
+// Instead, use the new route segment config
+export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs';
 
 export async function POST(req: NextRequest): Promise<NextResponse> {
   try {
