@@ -3,8 +3,12 @@ import { headers } from 'next/headers';
 import jwt from 'jsonwebtoken';
 import { megaClient } from '@/lib/mega';
 import { JwtUser } from '@/types/auth';
+import { promises as fs } from 'fs';
+import { join } from 'path';
+import os from 'os';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
+const TEMP_DIR = join(os.tmpdir(), 'cloud-uploads');
 
 // Middleware to verify JWT token
 const verifyToken = (authHeader: string | null): JwtUser => {
@@ -43,35 +47,52 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       password: process.env.MEGA_PASSWORD || '',
     });
 
-    // Get form data with streaming support
+    // Get form data
     const formData = await req.formData();
-    const file = formData.get('file') as File;
-    const path = formData.get('path') as string || '';
+    const chunk = formData.get('chunk') as File;
+    const fileName = formData.get('fileName') as string;
+    const fileId = formData.get('fileId') as string;
+    const chunkIndex = parseInt(formData.get('chunkIndex') as string);
+    const totalChunks = parseInt(formData.get('totalChunks') as string);
+    const uploadPath = formData.get('path') as string || '';
 
-    if (!file) {
-      throw new Error('No file provided');
+    if (!chunk || !fileName || !fileId || isNaN(chunkIndex) || isNaN(totalChunks)) {
+      throw new Error('Invalid chunk data');
     }
 
-    // If path already includes the user's folder, use it directly
-    const folderPath = path.startsWith(user.employeeId)
-      ? path
-      : path
-        ? `${user.employeeId}/${path}`
-        : user.employeeId;
-
-    // Upload file to MEGA
-    const arrayBuffer = await file.arrayBuffer();
-    const buffer = Buffer.from(arrayBuffer);
+    // Create temp directory if it doesn't exist
+    await fs.mkdir(TEMP_DIR, { recursive: true });
     
-    // Create a new File object from the buffer
-    const uploadFile = new File([buffer], file.name, {
-      type: file.type,
-      lastModified: file.lastModified,
-    });
+    // Save chunk to temp file
+    const chunkPath = join(TEMP_DIR, `${fileId}-${chunkIndex}`);
+    const buffer = Buffer.from(await chunk.arrayBuffer());
+    await fs.writeFile(chunkPath, buffer);
 
-    const result = await megaClient.uploadFile(uploadFile, folderPath);
+    // If this is the last chunk, combine all chunks and upload
+    if (chunkIndex === totalChunks - 1) {
+      const chunks = [];
+      for (let i = 0; i < totalChunks; i++) {
+        const tempChunkPath = join(TEMP_DIR, `${fileId}-${i}`);
+        const chunkData = await fs.readFile(tempChunkPath);
+        chunks.push(chunkData);
+        await fs.unlink(tempChunkPath); // Clean up chunk file
+      }
 
-    return NextResponse.json({ success: true, file: result });
+      const completeBuffer = Buffer.concat(chunks);
+      const completeFile = new File([completeBuffer], fileName);
+
+      // If path already includes the user's folder, use it directly
+      const folderPath = uploadPath.startsWith(user.employeeId)
+        ? uploadPath
+        : uploadPath
+          ? `${user.employeeId}/${uploadPath}`
+          : user.employeeId;
+
+      const result = await megaClient.uploadFile(completeFile, folderPath);
+      return NextResponse.json({ success: true, file: result });
+    }
+
+    return NextResponse.json({ success: true, message: 'Chunk received' });
   } catch (error) {
     console.error('Error in upload:', error);
     return NextResponse.json(

@@ -17,6 +17,7 @@ import {
   PhotoIcon
 } from '@heroicons/react/24/outline';
 import ConfirmDialog from '@/components/ConfirmDialog';
+import { uploadFileInChunks } from '@/lib/upload';
 
 interface MegaFile {
   id: string;
@@ -45,6 +46,7 @@ export default function Dashboard() {
   const [selectedFolder, setSelectedFolder] = useState<MegaFile | null>(null);
   const [user, setUser] = useState<User | null>(null);
   const [showProfile, setShowProfile] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [confirmDelete, setConfirmDelete] = useState<{
     open: boolean;
@@ -99,58 +101,42 @@ export default function Dashboard() {
   };
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-  
-    const formData = new FormData();
-    formData.append('file', file);
-    if (currentPath) {
-      formData.append('path', currentPath);
-    }
-  
     try {
+      if (!e.target.files || e.target.files.length === 0) {
+        return;
+      }
+
+      const file = e.target.files[0];
+      setIsUploading(true);
+
+      // Get current token
       const token = localStorage.getItem('token');
       if (!token) {
-        handleTokenError();
-        return;
+        throw new Error('No authentication token found');
       }
-  
-      // Show loading toast
-      const loadingToast = toast.loading('Uploading file...');
-  
-      // Upload the file
-      const response = await axios.post('/api/files/upload', formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data',
-          Authorization: `Bearer ${token}`
+
+      // Upload file using chunked upload
+      await toast.promise(
+        uploadFileInChunks(file, currentPath, token),
+        {
+          pending: `Uploading ${file.name}...`,
+          success: `${file.name} uploaded successfully!`,
+          error: {
+            render({ data }: { data: Error | unknown }) {
+              const errorMessage = data instanceof Error ? data.message : 'Unknown error';
+              return `Failed to upload ${file.name}: ${errorMessage}`;
+            }
+          }
         }
-      });
+      );
 
-      // Update files state with the new file
-      setFiles(prevFiles => [...prevFiles, response.data]);
-  
-      // Update loading toast to success
-      toast.update(loadingToast, {
-        render: "File uploaded successfully",
-        type: "success",
-        isLoading: false,
-        autoClose: 3000
-      });
-
-      // Reset the file input
-      if (fileInputRef.current) {
-        fileInputRef.current.value = '';
-      }
-    } catch (error: any) {
-      if (error.response?.status === 401) {
-        handleTokenError();
-        return;
-      }
-      const errorMessage = error.response?.data?.message || error.response?.data?.error || error.message;
-      toast.error('Failed to upload file: ' + errorMessage);
-      console.error('Error uploading file:', error);
-      
-      // Also reset the file input on error
+      // Refresh file list
+      await fetchFiles();
+    } catch (error) {
+      console.error('Upload error:', error);
+      toast.error(error instanceof Error ? error.message : 'Failed to upload file');
+    } finally {
+      setIsUploading(false);
       if (fileInputRef.current) {
         fileInputRef.current.value = '';
       }
@@ -379,20 +365,38 @@ export default function Dashboard() {
               <h1 className="text-xl sm:text-2xl font-bold text-vercel-text">Cloud Storage</h1>
             </div>
             <div className="flex flex-wrap items-center justify-center sm:justify-end gap-2 sm:gap-4 w-full sm:w-auto">
-              <label className="flex items-center space-x-2 px-3 sm:px-4 py-2 rounded-lg bg-vercel-primary text-vercel-button-text hover:bg-vercel-button-hover hover:text-vercel-button-text-hover transition-all duration-200 ease-in-out transform hover:scale-105 cursor-pointer">
-                <ArrowUpTrayIcon className="h-5 w-5" />
-                <span className="hidden sm:inline">Upload File</span>
-                <span className="sm:hidden">Upload</span>
+              <label className={`flex items-center space-x-2 px-3 sm:px-4 py-2 rounded-lg ${
+                isUploading 
+                  ? 'bg-vercel-card text-vercel-text cursor-not-allowed opacity-50'
+                  : 'bg-vercel-primary text-vercel-button-text hover:bg-vercel-button-hover hover:text-vercel-button-text-hover cursor-pointer'
+              } transition-all duration-200 ease-in-out transform hover:scale-105`}>
+                {isUploading ? (
+                  <>
+                    <svg className="animate-spin h-5 w-5 text-vercel-text" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    <span className="hidden sm:inline">Uploading...</span>
+                    <span className="sm:hidden">Upload</span>
+                  </>
+                ) : (
+                  <>
+                    <ArrowUpTrayIcon className="h-5 w-5" />
+                    <span className="hidden sm:inline">Upload File</span>
+                    <span className="sm:hidden">Upload</span>
+                  </>
+                )}
                 <input
                   type="file"
                   onChange={handleFileUpload}
                   ref={fileInputRef}
+                  disabled={isUploading}
                   className="hidden"
                 />
               </label>
               <button
                 onClick={() => setIsCreatingFolder(true)}
-                className="flex items-center space-x-2 px-3 sm:px-4 py-2 rounded-lg bg-vercel-card text-vercel-text hover:bg-vercel-card-hover transition-all duration-200 ease-in-out transform hover:scale-105"
+                className="flex items-center space-x-2 px-3 sm:px-4 py-2 rounded-lg bg-vercel-card text-vercel-text hover:bg-vercel-card-hover transition-all duration-200"
               >
                 <FolderPlusIcon className="h-5 w-5" />
                 <span className="hidden sm:inline">New Folder</span>
