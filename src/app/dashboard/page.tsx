@@ -44,6 +44,7 @@ export default function Dashboard() {
   const [isDeletingFolder, setIsDeletingFolder] = useState(false);
   const [selectedFolder, setSelectedFolder] = useState<MegaFile | null>(null);
   const [user, setUser] = useState<User | null>(null);
+  const [showProfile, setShowProfile] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [confirmDelete, setConfirmDelete] = useState<{
     open: boolean;
@@ -370,61 +371,57 @@ export default function Dashboard() {
 
   return (
     <div className="min-h-screen bg-vercel-black">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Header Section */}
-        <div className="flex justify-between items-center mb-8 animate-fade-in">
-          <div className="flex items-center space-x-4">
-            <h1 className="text-3xl font-bold text-vercel-text tracking-tight">Cloud Storage</h1>
-            {currentPath && (
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-8">
+        {/* Header */}
+        <div className="mb-6 sm:mb-8">
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+            <div className="flex items-center space-x-4 w-full sm:w-auto justify-center sm:justify-start">
+              <h1 className="text-xl sm:text-2xl font-bold text-vercel-text">Cloud Storage</h1>
+            </div>
+            <div className="flex flex-wrap items-center justify-center sm:justify-end gap-2 sm:gap-4 w-full sm:w-auto">
+              <label className="flex items-center space-x-2 px-3 sm:px-4 py-2 rounded-lg bg-vercel-primary text-vercel-button-text hover:bg-vercel-button-hover hover:text-vercel-button-text-hover transition-all duration-200 ease-in-out transform hover:scale-105 cursor-pointer">
+                <ArrowUpTrayIcon className="h-5 w-5" />
+                <span className="hidden sm:inline">Upload File</span>
+                <span className="sm:hidden">Upload</span>
+                <input
+                  type="file"
+                  onChange={handleFileUpload}
+                  ref={fileInputRef}
+                  className="hidden"
+                />
+              </label>
               <button
-                onClick={handleNavigateUp}
-                className="p-2 rounded-lg bg-vercel-card text-vercel-text hover:bg-vercel-card-hover transition-all duration-200 ease-in-out transform hover:scale-105"
+                onClick={() => setIsCreatingFolder(true)}
+                className="flex items-center space-x-2 px-3 sm:px-4 py-2 rounded-lg bg-vercel-card text-vercel-text hover:bg-vercel-card-hover transition-all duration-200 ease-in-out transform hover:scale-105"
               >
-                Go Back
+                <FolderPlusIcon className="h-5 w-5" />
+                <span className="hidden sm:inline">New Folder</span>
+                <span className="sm:hidden">Folder</span>
               </button>
-            )}
-          </div>
-          <div className="flex items-center space-x-4">
-            <button
-              onClick={() => setIsCreatingFolder(true)}
-              className="flex items-center space-x-2 px-4 py-2 rounded-lg bg-vercel-card text-vercel-text hover:bg-vercel-card-hover transition-all duration-200 ease-in-out transform hover:scale-105"
-            >
-              <FolderPlusIcon className="h-5 w-5" />
-              <span>New Folder</span>
-            </button>
-            <label className="flex items-center space-x-2 px-4 py-2 rounded-lg bg-vercel-primary text-vercel-button-text hover:bg-vercel-button-hover hover:text-vercel-button-text-hover transition-all duration-200 ease-in-out transform hover:scale-105 cursor-pointer">
-              <ArrowUpTrayIcon className="h-5 w-5" />
-              <span>Upload File</span>
-              <input
-                type="file"
-                onChange={handleFileUpload}
-                ref={fileInputRef}
-                className="hidden"
-              />
-            </label>
-            <button
-              onClick={handleLogout}
-              className="flex items-center space-x-2 px-4 py-2 rounded-lg bg-vercel-error text-white hover:bg-red-600 transition-all duration-200 ease-in-out transform hover:scale-105"
-            >
-              <ArrowRightOnRectangleIcon className="h-5 w-5" />
-              <span>Logout</span>
-            </button>
-            <button
-              onClick={() => setUser(null)}
-              className="flex items-center justify-center w-10 h-10 rounded-full bg-white text-black hover:bg-black hover:text-white border border-white transition-all z-10"
-            >
-              {user?.name?.charAt(0).toUpperCase()}
-            </button>
+              <button
+                onClick={handleLogout}
+                className="flex items-center space-x-2 px-3 sm:px-4 py-2 rounded-lg bg-vercel-error text-white hover:bg-red-600 transition-all duration-200 ease-in-out transform hover:scale-105"
+              >
+                <ArrowRightOnRectangleIcon className="h-5 w-5" />
+                <span className="hidden sm:inline">Logout</span>
+              </button>
+              <button
+                onClick={() => setShowProfile(true)}
+                className="flex items-center justify-center w-10 h-10 rounded-full bg-white text-black hover:bg-black hover:text-white border border-white transition-all z-10"
+              >
+                {user?.name?.charAt(0).toUpperCase()}
+              </button>
+            </div>
           </div>
         </div>
 
         {/* Breadcrumb Navigation */}
         {currentPath && (
-          <div className="mb-6 p-4 rounded-lg bg-vercel-card animate-slide-in">
-            <div className="flex items-center space-x-2 text-vercel-text">
+          <div className="mb-6 p-3 sm:p-4 rounded-lg bg-vercel-card animate-slide-in overflow-x-auto">
+            <div className="flex items-center space-x-2 text-vercel-text whitespace-nowrap">
               <button 
                 onClick={() => setCurrentPath('')}
-                className="hover:text-vercel-primary transition-colors"
+                className="hover:text-vercel-primary transition-colors text-sm sm:text-base"
               >
                 Root
               </button>
@@ -433,7 +430,7 @@ export default function Dashboard() {
                   <span className="text-vercel-text-secondary">/</span>
                   <button
                     onClick={() => setCurrentPath(array.slice(0, index + 1).join('/'))}
-                    className="hover:text-vercel-primary transition-colors"
+                    className="hover:text-vercel-primary transition-colors text-sm sm:text-base"
                   >
                     {part}
                   </button>
@@ -479,7 +476,7 @@ export default function Dashboard() {
         {files.length > 0 && (
           <div className="animate-fade-in">
             <h2 className="text-xl font-semibold text-vercel-text mb-4">Files</h2>
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 sm:gap-4">
               {files.map((file) => (
                 <div
                   key={file.id}
@@ -496,18 +493,18 @@ export default function Dashboard() {
                     {getFileIcon(file)}
                     
                     {/* Hover Effect */}
-                    <div className="absolute inset-0 bg-black bg-opacity-40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                    <div className="absolute inset-0 bg-black bg-opacity-40 opacity-0 group-hover:opacity-100 sm:group-hover:opacity-100 transition-opacity flex items-center justify-center">
                       <div className="flex flex-col items-center text-white">
-                        <ArrowDownTrayIcon className="h-8 w-8 mb-2" />
-                        <span className="text-sm">{formatFileSize(file.size)}</span>
+                        <ArrowDownTrayIcon className="h-6 w-6 sm:h-8 sm:w-8 mb-2" />
+                        <span className="text-xs sm:text-sm">{formatFileSize(file.size)}</span>
                       </div>
                     </div>
                   </a>
 
                   {/* File Info & Actions */}
-                  <div className="p-3 bg-black">
+                  <div className="p-2 sm:p-3 bg-black">
                     <div className="flex items-center justify-between gap-2">
-                      <span className="text-sm text-gray-300 truncate flex-1" title={file.name}>
+                      <span className="text-xs sm:text-sm text-gray-300 truncate flex-1" title={file.name}>
                         {file.name}
                       </span>
                       
@@ -517,17 +514,17 @@ export default function Dashboard() {
                           href={file.secure_url}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="p-1.5 text-gray-500 hover:text-white transition-colors rounded-full hover:bg-gray-800"
+                          className="p-1 sm:p-1.5 text-gray-500 hover:text-white transition-colors rounded-full hover:bg-gray-800"
                           title="Download"
                         >
-                          <ArrowDownTrayIcon className="h-4 w-4" />
+                          <ArrowDownTrayIcon className="h-3 w-3 sm:h-4 sm:w-4" />
                         </a>
                         <button
                           onClick={() => handleDeleteFile(file)}
-                          className="p-1.5 text-gray-500 hover:text-white transition-colors rounded-full hover:bg-gray-800"
+                          className="p-1 sm:p-1.5 text-gray-500 hover:text-white transition-colors rounded-full hover:bg-gray-800"
                           title="Delete"
                         >
-                          <TrashIcon className="h-4 w-4" />
+                          <TrashIcon className="h-3 w-3 sm:h-4 sm:w-4" />
                         </button>
                       </div>
                     </div>
@@ -596,6 +593,38 @@ export default function Dashboard() {
                   className="px-4 py-2 rounded-lg bg-vercel-primary text-vercel-button-text hover:bg-vercel-button-hover hover:text-vercel-button-text-hover disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
                 >
                   Create
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+        
+        {/* User Profile Modal */}
+        {showProfile && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50 animate-fade-in">
+            <div className="bg-black rounded-lg p-4 sm:p-6 w-full max-w-md animate-slide-in border border-gray-800">
+              <div className="flex flex-col sm:flex-row items-center sm:items-start space-y-4 sm:space-y-0 sm:space-x-4 mb-6">
+                <div className="w-16 h-16 rounded-full bg-white text-black flex items-center justify-center text-2xl font-semibold">
+                  {user?.name?.charAt(0).toUpperCase()}
+                </div>
+                <div className="text-center sm:text-left">
+                  <h3 className="text-xl font-semibold text-white mb-1">{user?.name}</h3>
+                  <p className="text-gray-400">Employee ID: {user?.employeeId}</p>
+                  <p className="text-gray-400">Department: {user?.department}</p>
+                </div>
+              </div>
+              <div className="flex flex-col sm:flex-row justify-end space-y-2 sm:space-y-0 sm:space-x-4">
+                <button
+                  onClick={() => setShowProfile(false)}
+                  className="w-full sm:w-auto px-4 py-2 rounded-lg bg-gray-900 text-white hover:bg-gray-800 transition-all duration-200"
+                >
+                  Close
+                </button>
+                <button
+                  onClick={handleLogout}
+                  className="w-full sm:w-auto px-4 py-2 rounded-lg bg-red-900 text-white hover:bg-red-800 transition-all duration-200"
+                >
+                  Logout
                 </button>
               </div>
             </div>
