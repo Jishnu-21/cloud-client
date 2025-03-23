@@ -38,7 +38,10 @@ class MegaClient {
       
       // Verify we can access the root folder
       const rootFiles = Object.values(this.storage.files)
-        .filter(file => file.parent === this.storage.root);
+        .filter(file => {
+          if (!this.storage?.root) return false;
+          return file.parent === this.storage.root.nodeId;
+        });
       
       console.log(`MEGA client initialized successfully. Found ${rootFiles.length} files/folders in root.`);
       console.log('Root folder contains:', rootFiles.map(f => ({name: f.name, type: f.directory ? 'folder' : 'file'})));
