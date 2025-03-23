@@ -9,6 +9,7 @@ interface CloudinaryResource {
   secure_url: string;
   resource_type: string;
   format: string;
+  bytes: number;
   created_at: string;
 }
 
@@ -43,11 +44,11 @@ export async function GET(req: Request) {
 
     // If path already includes the user's folder, use it directly
     // Otherwise, prepend the user's folder
-    const folderPath = path.startsWith(user.cloudinaryFolder)
+    const folderPath = path.startsWith(user.employeeId)
       ? path
       : path
-        ? `${user.cloudinaryFolder}/${path}`
-        : user.cloudinaryFolder;
+        ? `${user.employeeId}/${path}`
+        : user.employeeId;
 
     // Get all resource types (images, videos, and raw files)
     const [imageResources, videoResources, rawResources] = await Promise.all([
@@ -55,34 +56,31 @@ export async function GET(req: Request) {
         type: 'upload',
         prefix: folderPath,
         max_results: 500,
-        resource_type: 'image'
+        resource_type: 'image',
       }).catch(() => ({ resources: [] })),
       
       cloudinary.api.resources({
         type: 'upload',
         prefix: folderPath,
         max_results: 500,
-        resource_type: 'video'
+        resource_type: 'video',
       }).catch(() => ({ resources: [] })),
       
       cloudinary.api.resources({
         type: 'upload',
         prefix: folderPath,
         max_results: 500,
-        resource_type: 'raw'
-      }).catch(() => ({ resources: [] }))
+        resource_type: 'raw',
+      }).catch(() => ({ resources: [] })),
     ]);
 
     // Combine all resources
     const allResources = [
-      ...(imageResources.resources || []),
-      ...(videoResources.resources || []),
-      ...(rawResources.resources || [])
-    ].filter(resource => {
-      // Get the resource's folder path without the file name
-      const resourceFolder = resource.public_id.split('/').slice(0, -1).join('/');
-      // Only include files that are directly in the current folder
-      return resourceFolder === folderPath;
+      ...imageResources.resources,
+      ...videoResources.resources,
+      ...rawResources.resources,
+    ].sort((a, b) => {
+      return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
     });
 
     // Get subfolders
@@ -90,22 +88,29 @@ export async function GET(req: Request) {
 
     return NextResponse.json({
       files: allResources.map(resource => ({
-        public_id: resource.public_id,
+        id: resource.public_id,
+        name: resource.public_id.split('/').pop() || '',
+        path: resource.public_id,
+        size: resource.bytes,
+        type: 'file',
+        created_at: resource.created_at,
         secure_url: resource.secure_url,
-        resource_type: resource.resource_type,
-        format: resource.format,
-        created_at: resource.created_at
       })),
-      folders: (folders as CloudinaryFolder[]).map(folder => ({
+      folders: folders.map((folder: CloudinaryFolder) => ({
+        id: folder.path,
         name: folder.name,
-        path: folder.path
-      }))
+        path: folder.path,
+        size: 0,
+        type: 'folder',
+        created_at: new Date().toISOString(),
+        secure_url: '',
+      })),
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error fetching files:', error);
     return NextResponse.json(
-      { message: 'Failed to fetch files' },
-      { status: 500 }
+      { error: error.message || 'Failed to fetch files' },
+      { status: error.message === 'Invalid token' ? 401 : 500 }
     );
   }
 }
@@ -115,43 +120,34 @@ export async function DELETE(req: Request) {
     const headersList = headers();
     const authHeader = headersList.get('authorization');
     const user = verifyToken(authHeader);
-    
-    const { searchParams } = new URL(req.url);
-    const publicId = searchParams.get('publicId');
 
-    if (!publicId) {
-      return NextResponse.json(
-        { message: 'File public_id is required' },
-        { status: 400 }
-      );
-    }
+    const { publicId, isVideo } = await req.json();
 
-    // Check if file belongs to user
-    if (!publicId.startsWith(user.cloudinaryFolder)) {
+    // Ensure the user can only delete files in their folder
+    if (!publicId.startsWith(user.employeeId)) {
       return NextResponse.json(
-        { message: 'Access denied: File does not belong to your storage' },
+        { error: 'Unauthorized to delete this file' },
         { status: 403 }
       );
     }
 
-    // Delete the file
     const result = await cloudinary.uploader.destroy(publicId, {
-      invalidate: true
+      resource_type: isVideo ? 'video' : 'image',
     });
 
-    if (result.result !== 'ok') {
+    if (result.result === 'ok') {
+      return NextResponse.json({ success: true });
+    } else {
       return NextResponse.json(
-        { message: 'Failed to delete file from Cloudinary' },
+        { error: 'Failed to delete file' },
         { status: 500 }
       );
     }
-
-    return NextResponse.json({ message: 'File deleted successfully' });
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error deleting file:', error);
     return NextResponse.json(
-      { message: 'Failed to delete file' },
-      { status: 500 }
+      { error: error.message || 'Failed to delete file' },
+      { status: error.message === 'Invalid token' ? 401 : 500 }
     );
   }
 }

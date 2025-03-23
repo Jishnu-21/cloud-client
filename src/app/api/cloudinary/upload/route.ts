@@ -48,26 +48,55 @@ export async function POST(req: Request) {
     const bytes = await file.arrayBuffer();
     const buffer = Buffer.from(bytes);
 
+    // Get file details
+    const fileName = file.name;
+    const extension = fileName.split('.').pop()?.toLowerCase() || '';
+
+    // Determine resource type based on extension
+    let resourceType: "raw" | "image" | "video" = "raw";
+    const mimeType = file.type;
+
+    if (['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'bmp'].includes(extension)) {
+      resourceType = "image";
+    } else if (['mp4', 'mov', 'avi', 'webm', 'mkv'].includes(extension)) {
+      resourceType = "video";
+    }
+
+    // Create a unique filename while preserving extension
+    const timestamp = new Date().getTime();
+    const baseFileName = fileName.substring(0, fileName.lastIndexOf('.'));
+    const uniqueFileName = `${baseFileName}_${timestamp}`;
+
     // If path already includes the user's folder, use it directly
     // Otherwise, prepend the user's folder
-    const uploadPath = path
-      ? path.startsWith(user.cloudinaryFolder)
-        ? path
-        : `${user.cloudinaryFolder}/${path}`
-      : user.cloudinaryFolder;
+    const uploadPath = path?.startsWith(user.cloudinaryFolder)
+      ? path
+      : path
+        ? `${user.cloudinaryFolder}/${path}`
+        : user.cloudinaryFolder;
 
-    // Upload file to Cloudinary
+    // Upload to Cloudinary with modified configuration
     const result = await new Promise<CloudinaryUploadResult>((resolve, reject) => {
       const uploadStream = cloudinary.uploader.upload_stream(
         {
           folder: uploadPath,
-          resource_type: 'auto',
-          public_id: file.name.split('.')[0],  // Use original filename without extension as public_id
-          overwrite: true  // Allow overwriting files with same name
+          resource_type: "raw",  // Force raw for document files
+          use_filename: true,
+          unique_filename: true,
+          public_id: uniqueFileName,
+          format: extension,
+          type: 'upload',
+          overwrite: true,
+          raw_convert: 'asIs'  // Add this to prevent any automatic conversion
         },
         (error, result) => {
-          if (error) reject(error);
-          else resolve(result as CloudinaryUploadResult);
+          if (error) {
+            console.error('Cloudinary upload error:', error);
+            reject(error);
+          } else {
+            console.log('Cloudinary upload result:', result);
+            resolve(result as CloudinaryUploadResult);
+          }
         }
       );
 
@@ -75,17 +104,14 @@ export async function POST(req: Request) {
     });
 
     return NextResponse.json({
-      publicId: result.public_id,
-      url: result.secure_url,
-      resource_type: result.resource_type,
-      format: result.format,
-      original_filename: file.name
+      ...result,
+      original_filename: fileName
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error uploading file:', error);
     return NextResponse.json(
-      { message: 'Failed to upload file' },
-      { status: 500 }
+      { error: error.message || 'Failed to upload file' },
+      { status: error.message === 'Invalid token' ? 401 : 500 }
     );
   }
 }

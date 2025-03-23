@@ -16,20 +16,16 @@ import {
   VideoCameraIcon,
   PhotoIcon
 } from '@heroicons/react/24/outline';
-import FilePreviewModal from '@/components/FilePreviewModal';
+import ConfirmDialog from '@/components/ConfirmDialog';
 
-interface CloudinaryFile {
-  public_id: string;
-  secure_url: string;
-  resource_type: string;
-  format: string;
-  created_at: string;
-  original_filename?: string;
-}
-
-interface Folder {
+interface MegaFile {
+  id: string;
   name: string;
   path: string;
+  size: number;
+  type: 'file' | 'folder';
+  created_at: string;
+  secure_url: string;
 }
 
 interface User {
@@ -40,17 +36,19 @@ interface User {
 
 export default function Dashboard() {
   const router = useRouter();
-  const [files, setFiles] = useState<CloudinaryFile[]>([]);
-  const [folders, setFolders] = useState<Folder[]>([]);
+  const [files, setFiles] = useState<MegaFile[]>([]);
+  const [folders, setFolders] = useState<MegaFile[]>([]);
   const [currentPath, setCurrentPath] = useState('');
   const [newFolderName, setNewFolderName] = useState('');
   const [isCreatingFolder, setIsCreatingFolder] = useState(false);
   const [isDeletingFolder, setIsDeletingFolder] = useState(false);
-  const [selectedFolder, setSelectedFolder] = useState<Folder | null>(null);
-  const [selectedFile, setSelectedFile] = useState<CloudinaryFile | null>(null);
+  const [selectedFolder, setSelectedFolder] = useState<MegaFile | null>(null);
   const [user, setUser] = useState<User | null>(null);
-  const [showModal, setShowModal] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [confirmDelete, setConfirmDelete] = useState<{
+    open: boolean;
+    file: MegaFile | null;
+  }>({ open: false, file: null });
 
   const handleTokenError = () => {
     localStorage.removeItem('token');
@@ -80,12 +78,15 @@ export default function Dashboard() {
         handleTokenError();
         return;
       }
-      const response = await axios.get('/api/cloudinary/files', {
+      const response = await axios.get('/api/files', {
         params: { path: currentPath },
         headers: { Authorization: `Bearer ${token}` }
       });
-      setFiles(response.data.files || []);
-      setFolders(response.data.folders || []);
+
+      // Split files and folders
+      const allItems = response.data.files || [];
+      setFiles(allItems.filter((item: MegaFile) => item.type === 'file'));
+      setFolders(allItems.filter((item: MegaFile) => item.type === 'folder'));
     } catch (error: any) {
       if (error.response?.status === 401) {
         handleTokenError();
@@ -117,25 +118,15 @@ export default function Dashboard() {
       const loadingToast = toast.loading('Uploading file...');
   
       // Upload the file
-      const response = await axios.post('/api/cloudinary/upload', formData, {
+      const response = await axios.post('/api/files/upload', formData, {
         headers: {
           'Content-Type': 'multipart/form-data',
           Authorization: `Bearer ${token}`
         }
       });
 
-      // Create a proper file object with the information we have
-      const newFile = {
-        public_id: response.data.publicId,
-        secure_url: response.data.url,
-        resource_type: response.data.resource_type || 'image',
-        format: response.data.format || file.name.split('.').pop() || '',
-        created_at: new Date().toISOString(),
-        original_filename: response.data.original_filename || file.name
-      };
-  
       // Update files state with the new file
-      setFiles(prevFiles => [...prevFiles, newFile]);
+      setFiles(prevFiles => [...prevFiles, response.data]);
   
       // Update loading toast to success
       toast.update(loadingToast, {
@@ -165,7 +156,7 @@ export default function Dashboard() {
     }
   };
   
-  const handleDeleteFolder = async (folder: Folder) => {
+  const handleDeleteFolder = async (folder: MegaFile) => {
     try {
       const token = localStorage.getItem('token');
       if (!token) {
@@ -176,8 +167,8 @@ export default function Dashboard() {
       setIsDeletingFolder(true);
       setSelectedFolder(folder);
 
-      await axios.delete('/api/cloudinary/folder', {
-        params: { path: folder.path },
+      await axios.delete('/api/files', {
+        params: { fileId: folder.id },
         headers: { Authorization: `Bearer ${token}` }
       });
 
@@ -211,9 +202,10 @@ export default function Dashboard() {
       }
 
       setIsCreatingFolder(true);
-      await axios.post('/api/cloudinary/folder', {
+      await axios.post('/api/files', {
         name: newFolderName,
-        path: currentPath
+        path: currentPath,
+        type: 'folder'
       }, {
         headers: { Authorization: `Bearer ${token}` }
       });
@@ -233,68 +225,31 @@ export default function Dashboard() {
     }
   };
 
-  const deleteFolder = async () => {
-    if (!selectedFolder) return;
-
-    try {
-      const token = localStorage.getItem('token');
-      if (!token) {
-        handleTokenError();
-        return;
-      }
-      await axios.delete('/api/cloudinary/folder', {
-        params: { path: selectedFolder.path },
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      setIsDeletingFolder(false);
-      setSelectedFolder(null);
-      toast.success('Folder deleted successfully');
-      if (currentPath === selectedFolder.path) {
-        navigateUp();
-      } else {
-        fetchFiles();
-      }
-    } catch (error: any) {
-      if (error.response?.status === 401) {
-        handleTokenError();
-        return;
-      }
-      const errorMessage = error.response?.data?.message || error.response?.data?.error || error.message;
-      toast.error('Failed to delete folder: ' + errorMessage);
-      console.error('Error deleting folder:', error);
-      setIsDeletingFolder(true);
-    }
+  const handleDeleteFile = async (file: MegaFile) => {
+    setConfirmDelete({ open: true, file });
   };
 
-  const handleDeleteFile = async (publicId: string, resourceType: string) => {
-    if (!confirm('Are you sure you want to delete this file?')) {
-      return;
-    }
+  const confirmDeleteFile = async () => {
+    if (!confirmDelete.file) return;
 
     try {
       const token = localStorage.getItem('token');
       if (!token) {
-        toast.error('Please log in again');
+        handleTokenError();
         return;
       }
 
-      const response = await fetch('/api/cloudinary/delete', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({ publicId, resourceType }),
+      const response = await axios.delete('/api/files', {
+        params: { fileId: confirmDelete.file.id },
+        headers: { Authorization: `Bearer ${token}` }
       });
 
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || 'Failed to delete file');
+      if (!response.data.success) {
+        throw new Error('Failed to delete file');
       }
 
       // Remove the deleted file from the state
-      setFiles(files.filter(file => file.public_id !== publicId));
+      setFiles(files.filter(file => file.id !== confirmDelete.file?.id));
       toast.success('File deleted successfully');
     } catch (error: any) {
       console.error('Error deleting file:', error);
@@ -302,6 +257,8 @@ export default function Dashboard() {
       
       // Refresh the file list to ensure we're in sync
       fetchFiles();
+    } finally {
+      setConfirmDelete({ open: false, file: null });
     }
   };
 
@@ -312,11 +269,12 @@ export default function Dashboard() {
     toast.success('Logged out successfully');
   };
 
-  const navigateToFolder = (folderPath: string) => {
-    setCurrentPath(folderPath);
+  const handleFolderClick = (folder: MegaFile) => {
+    setCurrentPath(folder.path);
   };
 
-  const navigateUp = () => {
+  const handleNavigateUp = () => {
+    if (!currentPath) return;
     const pathParts = currentPath.split('/');
     pathParts.pop();
     setCurrentPath(pathParts.join('/'));
@@ -331,22 +289,83 @@ export default function Dashboard() {
     document.body.removeChild(a);
   };
 
-  const getFileName = (file: CloudinaryFile) => {
-    if (!file || !file.public_id) {
+  const getFileName = (file: MegaFile) => {
+    if (!file || !file.name) {
       return 'Untitled';
     }
-    return file.public_id.split('/').pop() || 'Untitled';
+    return file.name;
   };
 
-  const handleFolderClick = (folder: Folder) => {
-    setCurrentPath(folder.path);
+  const getFileType = (fileName: string): string => {
+    const parts = fileName.split('.');
+    return parts.length > 1 ? parts[parts.length - 1].toLowerCase() : '';
   };
 
-  const handleNavigateUp = () => {
-    if (!currentPath) return;
-    const pathParts = currentPath.split('/');
-    pathParts.pop();
-    setCurrentPath(pathParts.join('/'));
+  const getFileIcon = (file: MegaFile) => {
+    const fileType = getFileType(file.name);
+
+    if (['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(fileType)) {
+      return (
+        <div className="aspect-[4/3] w-full overflow-hidden bg-gray-900 relative">
+          <img
+            src={file.secure_url}
+            alt={file.name}
+            className="absolute inset-0 w-full h-full object-cover"
+            loading="lazy"
+            onError={(e) => {
+              // If image fails to load, show document icon
+              const target = e.target as HTMLImageElement;
+              target.style.display = 'none';
+              const parent = target.parentElement;
+              if (parent) {
+                const div = document.createElement('div');
+                div.className = 'absolute inset-0 flex flex-col items-center justify-center';
+                div.innerHTML = `
+                  <svg class="h-12 w-12 text-white mb-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                  </svg>
+                  <span class="text-xs text-gray-400 uppercase tracking-wider">${fileType}</span>
+                `;
+                parent.appendChild(div);
+              }
+            }}
+          />
+        </div>
+      );
+    }
+
+    if (['mp4', 'webm', 'mov'].includes(fileType)) {
+      return (
+        <div className="aspect-[4/3] w-full overflow-hidden bg-gray-900 flex flex-col items-center justify-center">
+          <VideoCameraIcon className="h-12 w-12 text-white mb-2" />
+          <span className="text-xs text-gray-400 uppercase tracking-wider">{fileType}</span>
+        </div>
+      );
+    }
+
+    if (fileType === 'pdf') {
+      return (
+        <div className="aspect-[4/3] w-full overflow-hidden bg-gray-900 flex flex-col items-center justify-center">
+          <DocumentIcon className="h-12 w-12 text-white mb-2" />
+          <span className="text-xs text-gray-400 uppercase tracking-wider">PDF</span>
+        </div>
+      );
+    }
+
+    return (
+      <div className="aspect-[4/3] w-full overflow-hidden bg-gray-900 flex flex-col items-center justify-center">
+        <DocumentIcon className="h-12 w-12 text-white mb-2" />
+        <span className="text-xs text-gray-400 uppercase tracking-wider">{fileType || 'File'}</span>
+      </div>
+    );
+  };
+
+  const formatFileSize = (bytes: number): string => {
+    if (bytes === 0) return '0 B';
+    const k = 1024;
+    const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return `${parseFloat((bytes / Math.pow(k, i)).toFixed(2))} ${sizes[i]}`;
   };
 
   return (
@@ -391,7 +410,7 @@ export default function Dashboard() {
               <span>Logout</span>
             </button>
             <button
-              onClick={() => setShowModal(true)}
+              onClick={() => setUser(null)}
               className="flex items-center justify-center w-10 h-10 rounded-full bg-white text-black hover:bg-black hover:text-white border border-white transition-all z-10"
             >
               {user?.name?.charAt(0).toUpperCase()}
@@ -431,7 +450,7 @@ export default function Dashboard() {
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
               {folders.map((folder) => (
                 <div
-                  key={folder.path}
+                  key={folder.id}
                   className="relative group p-4 rounded-lg bg-vercel-card hover:bg-vercel-card-hover transition-all duration-200 ease-in-out transform hover:-translate-y-1 hover:shadow-lg card-hover"
                 >
                   <div className="flex items-center justify-between">
@@ -444,7 +463,7 @@ export default function Dashboard() {
                     </button>
                     <button
                       onClick={() => handleDeleteFolder(folder)}
-                      disabled={isDeletingFolder && selectedFolder?.path === folder.path}
+                      disabled={isDeletingFolder && selectedFolder?.id === folder.id}
                       className="p-1.5 rounded-full bg-vercel-card text-vercel-error hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100"
                     >
                       <TrashIcon className="h-5 w-5" />
@@ -463,67 +482,39 @@ export default function Dashboard() {
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
               {files.map((file) => (
                 <div
-                  key={file.public_id}
+                  key={file.id}
                   className="relative group bg-black hover:bg-gray-900 transition-all duration-200"
                 >
-                  {/* Thumbnail Preview with Quick Preview Button */}
-                  <div 
-                    className="aspect-[4/3] w-full overflow-hidden bg-gray-900 relative cursor-pointer"
-                    onClick={() => setSelectedFile(file)}
+                  {/* File Preview with Direct Link */}
+                  <a 
+                    href={file.secure_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="block cursor-pointer relative"
+                    title={`${file.name} (${formatFileSize(file.size)})`}
                   >
-                    {(() => {
-                      const fileType = file.format?.toLowerCase();
-                      if (['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(fileType)) {
-                        return (
-                          <img
-                            src={file.secure_url}
-                            alt={file.public_id}
-                            className="w-full h-full object-contain"
-                          />
-                        );
-                      }
-                      if (['mp4', 'webm', 'mov'].includes(fileType)) {
-                        return (
-                          <div className="w-full h-full flex flex-col items-center justify-center">
-                            <VideoCameraIcon className="h-12 w-12 text-white mb-2" />
-                            <span className="text-xs text-gray-400 uppercase tracking-wider">{fileType}</span>
-                          </div>
-                        );
-                      }
-                      if (fileType === 'pdf') {
-                        return (
-                          <div className="w-full h-full flex flex-col items-center justify-center">
-                            <DocumentIcon className="h-12 w-12 text-white mb-2" />
-                            <span className="text-xs text-gray-400 uppercase tracking-wider">PDF</span>
-                          </div>
-                        );
-                      }
-                      return (
-                        <div className="w-full h-full flex flex-col items-center justify-center">
-                          <DocumentIcon className="h-12 w-12 text-white mb-2" />
-                          <span className="text-xs text-gray-400 uppercase tracking-wider">{fileType || 'File'}</span>
-                        </div>
-                      );
-                    })()}
+                    {getFileIcon(file)}
                     
-                    {/* Hover Effect for Preview */}
+                    {/* Hover Effect */}
                     <div className="absolute inset-0 bg-black bg-opacity-40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                      <EyeIcon className="h-8 w-8 text-white" />
+                      <div className="flex flex-col items-center text-white">
+                        <ArrowDownTrayIcon className="h-8 w-8 mb-2" />
+                        <span className="text-sm">{formatFileSize(file.size)}</span>
+                      </div>
                     </div>
-                  </div>
+                  </a>
 
                   {/* File Info & Actions */}
                   <div className="p-3 bg-black">
                     <div className="flex items-center justify-between gap-2">
-                      <span className="text-sm text-gray-300 truncate flex-1" title={file.public_id.split('/').pop()}>
-                        {file.public_id.split('/').pop()}
+                      <span className="text-sm text-gray-300 truncate flex-1" title={file.name}>
+                        {file.name}
                       </span>
                       
                       {/* Action Buttons */}
                       <div className="flex items-center gap-1 z-10">
                         <a
                           href={file.secure_url}
-                          download
                           target="_blank"
                           rel="noopener noreferrer"
                           className="p-1.5 text-gray-500 hover:text-white transition-colors rounded-full hover:bg-gray-800"
@@ -532,7 +523,7 @@ export default function Dashboard() {
                           <ArrowDownTrayIcon className="h-4 w-4" />
                         </a>
                         <button
-                          onClick={() => handleDeleteFile(file.public_id, file.resource_type)}
+                          onClick={() => handleDeleteFile(file)}
                           className="p-1.5 text-gray-500 hover:text-white transition-colors rounded-full hover:bg-gray-800"
                           title="Delete"
                         >
@@ -611,48 +602,13 @@ export default function Dashboard() {
           </div>
         )}
         
-        {/* Profile Modal */}
-        {showModal && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-            <div className="bg-vercel-card rounded-lg p-6 max-w-sm w-full border border-white/10">
-              <div className="flex justify-between items-center mb-4">
-                <h2 className="text-xl font-semibold text-white">Profile Details</h2>
-                <button
-                  onClick={() => setShowModal(false)}
-                  className="text-gray-400 hover:text-white transition-colors"
-                >
-                  ✕
-                </button>
-              </div>
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-400 mb-1">
-                    Employee ID
-                  </label>
-                  <p className="text-white">{user?.employeeId}</p>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-400 mb-1">
-                    Name
-                  </label>
-                  <p className="text-white">{user?.name}</p>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-400 mb-1">
-                    Department
-                  </label>
-                  <p className="text-white">{user?.department}</p>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-        
-        {/* Preview Modal */}
-        <FilePreviewModal
-          open={!!selectedFile}
-          onClose={() => setSelectedFile(null)}
-          file={selectedFile}
+        {/* Confirmation Dialog */}
+        <ConfirmDialog
+          open={confirmDelete.open}
+          title="Delete File"
+          message={`Are you sure you want to delete "${confirmDelete.file?.name}"? This action cannot be undone.`}
+          onConfirm={confirmDeleteFile}
+          onCancel={() => setConfirmDelete({ open: false, file: null })}
         />
       </div>
     </div>
