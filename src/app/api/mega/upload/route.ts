@@ -28,9 +28,6 @@ export const runtime = 'nodejs';
 // Add custom configuration for large files
 export const fetchCache = 'force-no-store';
 export const revalidate = 0;
-export const bodyParser = {
-  sizeLimit: '500mb' // Or use '0' for unlimited
-};
 
 export async function POST(req: NextRequest): Promise<NextResponse> {
   try {
