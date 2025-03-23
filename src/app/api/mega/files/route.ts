@@ -22,43 +22,64 @@ const verifyToken = (authHeader: string | null): JwtUser => {
   return decoded as JwtUser;
 };
 
+// Define allowed methods
 export async function GET(req: Request): Promise<NextResponse> {
   try {
     const headersList = headers();
     const authHeader = headersList.get('authorization');
-    const user = verifyToken(authHeader);
-    const { searchParams } = new URL(req.url);
-    const path = searchParams.get('path') || '';
 
-    // Initialize MEGA client if not already initialized
+    // Verify JWT token
+    const user = verifyToken(authHeader);
+
+    // Initialize MEGA client if needed
     await megaClient.initialize({
       email: MEGA_EMAIL,
       password: MEGA_PASSWORD,
     });
 
-    // If path already includes the user's folder, use it directly
-    // Otherwise, prepend the user's folder
-    const folderPath = path.startsWith(user.employeeId)
-      ? path
-      : path
-        ? `${user.employeeId}/${path}`
-        : user.employeeId;
+    // Get path from query params
+    const { searchParams } = new URL(req.url);
+    const path = searchParams.get('path') || '';
 
-    const files: MegaFileInfo[] = await megaClient.listFiles(folderPath);
-
-    // Separate files and folders
-    const folders = files.filter(item => item.type === 'folder');
-    const filesList = files.filter(item => item.type === 'file');
-
-    return NextResponse.json({
-      files: filesList,
-      folders: folders,
-    });
-  } catch (error: any) {
-    console.error('Error fetching files:', error);
+    // List files
+    const files = await megaClient.listFiles(path);
+    return NextResponse.json({ files });
+  } catch (error) {
+    console.error('Error in GET /api/mega/files:', error);
     return NextResponse.json(
-      { error: error.message || 'Failed to fetch files' },
-      { status: error.message === 'Invalid token' ? 401 : 500 }
+      { error: error instanceof Error ? error.message : 'Internal server error' },
+      { status: error instanceof Error ? 400 : 500 }
+    );
+  }
+}
+
+export async function POST(req: Request): Promise<NextResponse> {
+  try {
+    const headersList = headers();
+    const authHeader = headersList.get('authorization');
+
+    // Verify JWT token
+    const user = verifyToken(authHeader);
+
+    // Initialize MEGA client if needed
+    await megaClient.initialize({
+      email: MEGA_EMAIL,
+      password: MEGA_PASSWORD,
+    });
+
+    // Get data from request body
+    const { name, path } = await req.json();
+
+    // Create folder
+    await megaClient.createFolder(name, path);
+    
+    // Return success
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    console.error('Error in POST /api/mega/files:', error);
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : 'Internal server error' },
+      { status: error instanceof Error ? 400 : 500 }
     );
   }
 }
@@ -67,28 +88,38 @@ export async function DELETE(req: Request): Promise<NextResponse> {
   try {
     const headersList = headers();
     const authHeader = headersList.get('authorization');
+
+    // Verify JWT token
     const user = verifyToken(authHeader);
 
-    const { fileId, isFolder } = await req.json();
-
-    // Initialize MEGA client if not already initialized
+    // Initialize MEGA client if needed
     await megaClient.initialize({
       email: MEGA_EMAIL,
       password: MEGA_PASSWORD,
     });
 
-    if (isFolder) {
-      await megaClient.deleteFolder(fileId);
-    } else {
-      await megaClient.deleteFile(fileId);
+    // Get file ID from query params
+    const { searchParams } = new URL(req.url);
+    const fileId = searchParams.get('id');
+    
+    if (!fileId) {
+      throw new Error('File ID is required');
     }
 
+    // Delete file
+    await megaClient.deleteFile(fileId);
+    
+    // Return success
     return NextResponse.json({ success: true });
-  } catch (error: any) {
-    console.error('Error deleting file:', error);
+  } catch (error) {
+    console.error('Error in DELETE /api/mega/files:', error);
     return NextResponse.json(
-      { error: error.message || 'Failed to delete file' },
-      { status: error.message === 'Invalid token' ? 401 : 500 }
+      { error: error instanceof Error ? error.message : 'Internal server error' },
+      { status: error instanceof Error ? 400 : 500 }
     );
   }
 }
+
+// Export allowed methods
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
