@@ -20,12 +20,12 @@ const verifyToken = (authHeader: string | null): JwtUser => {
   return decoded as JwtUser;
 };
 
-// Configure for large file uploads
-export const maxDuration = 300; // 5 minutes timeout
+// Configure for uploads within Vercel Hobby plan limits
+export const maxDuration = 60; // 60 seconds maximum for hobby plan
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
-// Add custom configuration for large files
+// Add custom configuration for files
 export const fetchCache = 'force-no-store';
 export const revalidate = 0;
 
